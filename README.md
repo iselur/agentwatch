@@ -187,6 +187,18 @@ written in, and the same reading [agentlog](https://github.com/iselur/agentlog)
 takes, so the two never disagree about the same line. Resolving it as local
 time instead would make one log say different things on different machines.
 
+**An edit is reported once it lands, not once it is sent.** Codex sends a
+patch in two records — the envelope, and a `patch_apply_end` saying whether it
+applied — and `✎` comes from the second one. A feed that scrolls has no
+retraction, so announcing an edit that is then rejected is worse than
+announcing it a fraction of a second late. The cost is measured: on 1189 real
+session files, 44 of them sent an envelope and no end record ever followed (56
+calls, against 713 end records elsewhere), and those edits are not shown.
+There is no honest fix in a stream — the end record is the very next record
+711 times out of 763, so flushing early would announce edits that failed.
+[agentlog](https://github.com/iselur/agentlog) reads whole files after the
+fact and does recover them.
+
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 

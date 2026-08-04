@@ -376,9 +376,18 @@ def _codex_script(payload: Dict, tr: Tracker, at) -> List[Dict]:
             tr.project = found
 
     # Deliberately no write here.  The envelope in the snippet only proves one
-    # was sent; a patch_apply_end follows within a fraction of a second, says
-    # whether it applied, and names the files absolutely.  Reporting from the
-    # call instead would announce edits that failed.
+    # was sent; the patch_apply_end that usually follows says whether it
+    # applied and names the files absolutely.  Reporting from the call instead
+    # would announce edits that failed, and a scrolling feed has no retraction.
+    #
+    # "Usually" is the honest word: on 1189 real session files, 44 of them sent
+    # an envelope and no end record ever came — 56 calls, against 713 end
+    # records elsewhere.  Those edits are not shown, and that is the price.
+    # There is no trigger that would recover them: the end record is the very
+    # next record 711 times out of 763, so flushing on the next record would
+    # fire early for 35 calls still in flight.  agentlog reads whole files and
+    # can decide per session, so it covers this; a stream cannot.
+    # tests/test_patch_envelope_silence.py pins both halves.
     return out
 
 
