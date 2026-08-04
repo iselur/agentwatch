@@ -72,8 +72,35 @@ def discover(home: str, sources: Tuple[str, ...] = ("claude", "codex")) -> List[
     return found
 
 
+def _subagent_parent(path: str) -> str:
+    """The session a subagent transcript belongs to, or "" if it is not one.
+
+    Claude Code writes a subagent's whole transcript beside its parent's log:
+
+        <project>/<session-id>.jsonl
+        <project>/<session-id>/subagents/agent-<hex>.jsonl
+
+    The file is named after the subagent, which names nothing a person can look
+    up; the directory holding it is named after the sitting, which does.
+    """
+    parent = os.path.dirname(path)
+    if os.path.basename(parent) != "subagents":
+        return ""
+    return os.path.basename(os.path.dirname(parent))
+
+
 def session_id_for(path: str, source: str) -> str:
-    """A short, stable id for a session, taken from its filename."""
+    """A short, stable id for a session, taken from its filename.
+
+    A subagent's transcript is part of a sitting rather than a sitting of its
+    own, so it answers with the id of the session that spawned it — the work is
+    that session's work, and a reader joining ``--json`` output by session must
+    find it there.  Claude's layout only; Codex writes no subagent transcripts.
+    """
+    if source == "claude":
+        parent = _subagent_parent(path)
+        if parent:
+            return parent
     base = os.path.splitext(os.path.basename(path))[0]
     if source == "codex":
         # rollout-<date>-<uuid>.jsonl — the uuid is the last five dash-parts.
@@ -91,7 +118,12 @@ def decode_claude_project(path: str) -> str:
     dash.  Treat the result as a label of last resort; a ``cwd`` seen in the log
     always wins.
     """
-    name = os.path.basename(os.path.dirname(path))
+    holder = os.path.dirname(path)
+    if os.path.basename(holder) == "subagents":
+        # A subagent transcript sits two levels deeper than its parent's log,
+        # so the directory beside it is the session id, not the project.
+        holder = os.path.dirname(os.path.dirname(holder))
+    name = os.path.basename(holder)
     if name.startswith("-"):
         # The leading dash is the root slash.  Dropping it leaves a relative
         # path, which then fails to shorten anything in the output.
@@ -348,8 +380,14 @@ class Watcher:
         return events
 
     def watched(self) -> int:
-        """How many logs are actually being followed right now."""
-        return sum(1 for s in self._files.values() if s.offset >= 0)
+        """How many sittings are actually being followed right now.
+
+        Sessions, not files.  A session that handed work to twenty subagents
+        has twenty-one logs open and is still one thing happening; counting the
+        files said `watching 21 sessions` for a person sitting at one.
+        """
+        return len({s.tracker.session for s in self._files.values()
+                    if s.offset >= 0})
 
     def unreadable(self) -> List[str]:
         """Session logs that exist and could not be opened, sorted.

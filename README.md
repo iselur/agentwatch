@@ -236,6 +236,20 @@ suppression, and two edits bring two envelopes however close together they
 land. The window survives only as an expiry, so an envelope whose result never
 came cannot sit waiting to swallow the next real edit.
 
+**A subagent's transcript is part of a session, not a session of its own.** When
+Claude Code hands work to a subagent it writes that subagent's whole transcript
+to its own file, in a `subagents/` directory named after the parent session.
+Every `.jsonl` under the projects tree was being adopted as a separate sitting.
+On the developer's machine 393 of 864 Claude log files are subagent transcripts
+— 45% of them — so `watching N sessions` counted nearly twice the sittings that
+existed, and every event a subagent produced carried a session id of
+`agent-a0940e681059ff8ec`, which names nothing a person can look up. The work
+itself was never the problem and has not changed: a `pytest -x` a subagent ran
+is a command that ran on this machine during this sitting, and it still
+streams. What goes is the claim that it happened somewhere else — the id now
+comes from the directory, which names the session, rather than the filename,
+which names nothing.
+
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 

@@ -361,7 +361,9 @@ def _follow(watcher: Watcher, args, emit) -> int:
     """
     first = watcher.poll()          # adopts the files; also replays --since
     count = watcher.watched()
-    _note("watching {} session log{} · Ctrl-C to stop".format(
+    # Sessions, not logs.  A sitting that fanned out to twenty subagents has
+    # twenty-one files open and is one thing happening; see Watcher.watched.
+    _note("watching {} session{} · Ctrl-C to stop".format(
         count, "" if count == 1 else "s")
         if count else "waiting for a session to start · Ctrl-C to stop")
     if _unreadable_note(watcher):
