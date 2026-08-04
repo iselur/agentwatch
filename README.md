@@ -236,6 +236,29 @@ suppression, and two edits bring two envelopes however close together they
 land. The window survives only as an expiry, so an envelope whose result never
 came cannot sit waiting to swallow the next real edit.
 
+**A script that failed is a failure whether or not it named a command.** Codex
+runs everything through a JavaScript snippet, and a snippet that only sends a
+patch has no command in it to be named after. Those failures used to be
+dropped, on the grounds that the `patch_apply_end` had already reported the
+same thing with the files and the reason in it. Measured against every rollout
+on this machine, that was true almost none of the times it was used: of 67
+failing snippets with no command to name, not one shared a call id with a
+failed patch. Their patches had failed *inside* the script, so no end record
+was ever written and nothing said anything at all — one real session showed `0
+errors` against six failed patch attempts. They are reported now, named after
+the files the envelope was trying to change, because `patch server.py` is a
+line you can act on and a bare "something failed" is not. Five more had nothing
+in them at all — a snippet that died of a syntax error before it ran anything —
+and those say `script failed`, which is all there is to say.
+
+The silence is kept for what it was meant for: a patch that failed to apply is
+still reported once, by the record that names the files, and not a second time
+by the script's own result. Working out which script a patch belongs to takes
+two steps, because the end record usually does not carry the script's id — of
+713 real patch results, 646 are named `exec-<uuid>`, which appears nowhere else
+in the file. So the id is used when it matches, and otherwise the patch belongs
+to the script that was running when it failed.
+
 **A subagent's transcript is part of a session, not a session of its own.** When
 Claude Code hands work to a subagent it writes that subagent's whole transcript
 to its own file, in a `subagents/` directory named after the parent session.

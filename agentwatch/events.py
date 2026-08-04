@@ -163,6 +163,15 @@ class Tracker:
         # the result that says it applied.  See ``confirms_envelope``.
         self._pending: Dict[str, List[datetime]] = {}
         self._pending_order: List[str] = []
+        # Calls whose patch has already been reported as failed, so that the
+        # script's own result does not say the same thing again with less in
+        # it.  See ``patch_failed``.
+        self._failed_patches: List[str] = []
+        # The script that is running right now, if one is.  A patch result
+        # names its own call id, which is usually from a different namespace
+        # than the script's, so the script it belongs to is the one it
+        # interrupted.  See ``patch_failure``.
+        self._open_call = ""
 
     def remember(self, call_id: str, label: str) -> None:
         if not call_id or not label:
@@ -175,6 +184,37 @@ class Tracker:
 
     def recall(self, call_id: str) -> str:
         return self._labels.get(call_id, "")
+
+    def running(self, call_id: str) -> None:
+        """A script has been issued and has not reported back yet."""
+        self._open_call = call_id
+
+    def patch_failure(self, call_id: str) -> None:
+        """Remember that a patch failure has been reported, and for whom.
+
+        Codex sends a patch by running a script, so one failed patch can
+        surface twice: the ``patch_apply_end`` names the files and says why,
+        and the script's own result says only that something failed.  Dropping
+        the second needs to know which script it belongs to.
+
+        The end record carries a call id, but usually not the script's: of 713
+        real ``patch_apply_end`` records 646 are named ``exec-<uuid>``, an id
+        that appears nowhere else in the file, and only 67 share the
+        ``call_<...>`` namespace the scripts use.  So the id is taken when it
+        matches and the running script is used when it does not — the patch was
+        applied by that script, and its end record arrives between the call and
+        its result every time (53 of 53 where both ids matched, and all 5 real
+        patch failures fall inside a script that had not yet reported back).
+        """
+        for cid in (call_id, self._open_call):
+            if cid:
+                self._failed_patches.append(cid)
+        while len(self._failed_patches) > self._max_labels:
+            self._failed_patches.pop(0)
+
+    def patch_failed(self, call_id: str) -> bool:
+        """Has a patch failure already been reported for this script?"""
+        return bool(call_id) and call_id in self._failed_patches
 
     def envelope_sent(self, path: str, at: Optional[datetime]) -> None:
         """Remember that a patch for this file was reported from its envelope.
@@ -386,12 +426,24 @@ def _codex_events(obj: Dict, tr: Tracker) -> List[Dict]:
         elif ptype == "function_call" and payload.get("name") in _CODEX_WORK_CALLS:
             out.extend(_codex_call(payload, tr, at))
         elif ptype == "custom_tool_call_output":
-            # A script that only sent a patch has already had its failure
-            # reported, in more detail, by patch_apply_end.  With no command to
-            # name, this line would be a bare second "something failed".
-            named = tr.recall(payload.get("call_id") or "")
-            if named and _script_failed(payload.get("output")):
-                out.append(tr._event(at, "error", named))
+            # A patch that failed to apply has already been reported, in more
+            # detail, by the patch_apply_end for this same call, so this line
+            # would be a second and worse account of it.  That is the whole of
+            # the silence, and it is decided by call id.
+            #
+            # It used to be decided by whether a command had been remembered,
+            # which is not the same question and is wrong far more often than
+            # it is right: of 67 failing snippets with no command to name on
+            # the developer's 1189 rollouts, not one shared a call id with a
+            # failing patch_apply_end.  Their patches had failed *inside* the
+            # script, so no end record was ever written and nothing said
+            # anything at all — one real session showed `0 errors` against six
+            # failed patch attempts.
+            call_id = payload.get("call_id") or ""
+            if _script_failed(payload.get("output")) \
+                    and not tr.patch_failed(call_id):
+                out.append(tr._event(at, "error",
+                                     tr.recall(call_id) or "script failed"))
         elif ptype == "function_call_output":
             output = payload.get("output")
             if isinstance(output, dict):
@@ -435,6 +487,7 @@ def _codex_script(payload: Dict, tr: Tracker, at) -> List[Dict]:
     if not isinstance(raw, str) or not raw:
         return []
     call_id = payload.get("call_id") or ""
+    tr.running(call_id)
     out: List[Dict] = []
 
     for found in _JS_COMMAND.findall(raw):
@@ -450,6 +503,18 @@ def _codex_script(payload: Dict, tr: Tracker, at) -> List[Dict]:
     # Codex does not always announce a cwd, but every exec snippet carries a
     # workdir.  Without reading it, the project column stays empty for a whole
     # session that was never in doubt.
+    # A snippet that only sends a patch has no command in it to be named after,
+    # and the failure that may follow carries nothing but the call id.  The
+    # envelope names the files it was trying to change, so remember that much:
+    # `patch server.py` is a line a person can act on where a bare "something
+    # failed" is not.  This remembers a label and nothing else — no write is
+    # reported from the envelope, for the reason set out below.
+    if not tr.recall(call_id):
+        touched = _patched_files(raw)
+        if touched:
+            tr.remember(call_id, "patch " + ", ".join(
+                os.path.basename(p) for p in touched[:3]))
+
     workdir = _JS_WORKDIR.search(raw)
     if workdir and not tr.project:
         found = _unquote(workdir.group(1)).strip()
@@ -503,6 +568,7 @@ def _codex_patch_result(payload: Dict, tr: Tracker, at) -> List[Dict]:
     paths = sorted(changes) if isinstance(changes, dict) else []
     if payload.get("success", True):
         return _codex_writes(paths, tr.project or "", tr, at)
+    tr.patch_failure(payload.get("call_id") or "")
     names = ", ".join(os.path.basename(p) for p in paths[:3])
     return [tr._event(at, "error", "patch did not apply" + (": " + names if names else ""))]
 
