@@ -116,10 +116,23 @@ def _sources(args) -> Tuple[str, ...]:
 
 
 def _resolve_home(args, parser) -> str:
-    home = args.home or os.environ.get("AGENTWATCH_HOME") or os.path.expanduser("~")
-    if not os.path.isdir(home):
-        parser.error("no such directory: {}".format(home))
-    return home
+    """Where to look, and whether a bad answer is worth stopping over.
+
+    A directory somebody named — typed, or exported as ``AGENTWATCH_HOME`` —
+    is a directory they meant, so getting it wrong is worth saying out loud:
+    staying quiet would look like a slow afternoon on a box that was never
+    being watched.  A ``HOME`` that merely came with the process is a
+    different thing.  Containers started with ``--user 1001`` and pods with
+    ``runAsUser`` hand you a home nobody created, and this tool is exactly the
+    sort of thing left running in one of those.  There being no sessions there
+    is not an error; it is the empty case, which we already know how to say.
+    """
+    named = args.home or os.environ.get("AGENTWATCH_HOME")
+    if named:
+        if not os.path.isdir(named):
+            parser.error("no such directory: {}".format(named))
+        return named
+    return os.path.expanduser("~")
 
 
 def _as_typed(text: Optional[str]) -> Optional[str]:
