@@ -14,6 +14,7 @@ no exit 1 — agentwatch reports what an agent is doing, it does not judge it.
 from __future__ import annotations
 
 import argparse
+import codecs
 import os
 import re
 import sys
@@ -121,7 +122,50 @@ def _resolve_home(args, parser) -> str:
     return home
 
 
+def _as_typed(text: Optional[str]) -> Optional[str]:
+    """An argument in the form it was typed, not the form the locale allowed.
+
+    Python decodes ``sys.argv`` with the filesystem encoding, and on a machine
+    with no locale that encoding is ASCII — so ``--project 設定`` arrives as a
+    run of surrogates and matches nothing.  A filter that silently matches
+    nothing is the worst way for this to fail: it looks exactly like a quiet
+    afternoon.  ``os.fsencode`` gives the bytes back untouched, and the shell
+    that sent them was speaking UTF-8.
+    """
+    if text is None or text.isascii():
+        return text                     # the overwhelmingly common case
+    try:
+        return os.fsencode(text).decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
+
+
+def _write_utf8_if_the_locale_said_nothing() -> None:
+    """Write UTF-8 when the machine claims it can only take ASCII.
+
+    A container with no locale set — a Dockerfile without ``ENV LANG``, cron,
+    most of CI — leaves Python believing stdout is ASCII, and a watcher is
+    exactly what gets left running on a box like that.  Every path it prints
+    then comes out as a row of question marks, which is not a file anybody can
+    go and open, and under ``--json`` it is not a path the reading program can
+    use either.
+
+    An ASCII claim is not a claim about the terminal, though.  It is the
+    absence of one, and the terminal on the other end is virtually always
+    UTF-8.  So we write UTF-8 and keep ``surrogateescape``, which hands back
+    unchanged the bytes of any filename this machine could not decode — that is
+    what makes a name it cannot spell come out spelled right anyway.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if codecs.lookup(stream.encoding or "").name == "ascii":
+                stream.reconfigure(encoding="utf-8", errors="surrogateescape")
+        except (AttributeError, LookupError, OSError, ValueError):
+            pass                        # not a real stream, or already written to
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _write_utf8_if_the_locale_said_nothing()
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -153,7 +197,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         sources=_sources(args),
         since=since,
         stale_s=args.stale,
-        project=args.project,
+        project=_as_typed(args.project),
     )
 
     marks = marks_for(sys.stdout)
@@ -176,7 +220,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             first = watcher.poll()
             shown = emit(first)
             if not args.json and shown == 0:
-                _note(_nothing_message(watcher, since, args.project))
+                _note(_nothing_message(watcher, since, _as_typed(args.project)))
             return 0
         return _follow(watcher, args, emit)
     except KeyboardInterrupt:
