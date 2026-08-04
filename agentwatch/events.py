@@ -147,6 +147,13 @@ class Tracker:
         self.session = session
         self.source = source
         self.project = project
+        # The uuid of the record just read, or "" for a format that has none.
+        # Claude Code writes the same record into two files whenever a session
+        # is resumed or a project directory is copied, so the caller needs a
+        # way to tell a record it has already shown from one that is new.  It
+        # lives here because this is where the record is parsed; see
+        # ``Watcher._read_new``.
+        self.record_id = ""
         self._labels: Dict[str, str] = {}
         # Bounded: a long session issues thousands of calls, and a watcher that
         # grows without limit is a watcher that gets killed overnight.
@@ -219,6 +226,8 @@ def events_from_line(raw: str, tracker: Tracker) -> List[Dict]:
         return []
     if not isinstance(obj, dict):
         return []
+    uuid = obj.get("uuid")
+    tracker.record_id = uuid if isinstance(uuid, str) else ""
     try:
         if tracker.source == "codex":
             return _codex_events(obj, tracker)

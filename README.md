@@ -238,6 +238,25 @@ reported: most records in a session log are not events, so that is the
 ordinary case on every file all day. Exit stays `0`; agentwatch reports, it
 does not gate.
 
+**A record is shown once, however many files it is written into.** `claude
+--resume` does not continue the old file. It opens a new session with a new id,
+copies the earlier transcript into it verbatim — same uuids, same timestamps —
+and only then starts appending new work. A watcher adopts that new file under
+the rule "a file that appeared since we started is read whole, because all of
+it is new to the user", and every command, write and error of the earlier
+sitting scrolls past a second time as though it were happening now. The same
+records also land in two files when a project directory is copied or moved: the
+log exists under both names, neither is a symlink, and the walk finds both.
+
+Both have the same answer: a record uuid names an event, and an event is shown
+once. Files are adopted oldest first, by mtime, so the events appear under the
+directory the work was actually done in. A replayed record is still read — it
+is where a resumed session says which directory it is in — but it prints
+nothing.
+
+Codex records carry no uuid, and its several files for one session are parallel
+workers doing separate work, so nothing there is deduplicated.
+
 ---
 
 ## Privacy

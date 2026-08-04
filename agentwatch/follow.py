@@ -51,6 +51,15 @@ def _walk_jsonl(root: str) -> List[str]:
     return out
 
 
+def _mtime_then_name(entry: Tuple[str, str]) -> Tuple[float, str]:
+    """Sort key: oldest file first, ties by name, unstattable files last."""
+    path = entry[0]
+    try:
+        return (os.path.getmtime(path), path)
+    except OSError:
+        return (float("inf"), path)
+
+
 def discover(home: str, sources: Tuple[str, ...] = ("claude", "codex")) -> List[Tuple[str, str]]:
     """(path, source) for every session log under a home directory."""
     found: List[Tuple[str, str]] = []
@@ -157,6 +166,12 @@ class Watcher:
         self._found = 0
         self._last_scan = 0.0
         self._project_names: Dict[str, str] = {}
+        # Record uuids already shown.  Deliberately not bounded: it holds one
+        # short id per record actually read, which is a fraction of the bytes
+        # the watcher has already read to get them, and evicting the oldest
+        # would drop exactly the records a resume is most likely to replay --
+        # reintroducing the double-printing this exists to prevent, silently.
+        self._seen_records: set = set()
 
     # -- scanning ---------------------------------------------------------
 
@@ -224,12 +239,22 @@ class Watcher:
 
     def _scan(self) -> None:
         found = 0
+        fresh = []
         for path, source in discover(self.home, self.sources):
             found += 1
             if path in self._files:
                 continue
             if not self._fresh(path):
                 continue
+            fresh.append((path, source))
+        # Oldest first.  When the same records are in two files -- a copied
+        # project directory, most often -- the first one read is the one that
+        # shows them, and that should be the original rather than whichever the
+        # directory listing happened to name first.  Only the handful of files
+        # not already followed are sorted, so the extra stat is not paid on
+        # every file on every rescan.
+        fresh.sort(key=_mtime_then_name)
+        for path, source in fresh:
             self._adopt(path, source)
         self._found = found
         self._first_scan = False
@@ -274,7 +299,19 @@ class Watcher:
         for line in data[:cut].split(b"\n"):
             if not line:
                 continue
-            out.extend(events_from_line(line.decode("utf-8", "replace"), state.tracker))
+            produced = events_from_line(line.decode("utf-8", "replace"),
+                                        state.tracker)
+            uuid = state.tracker.record_id
+            if uuid:
+                if uuid in self._seen_records:
+                    # Already shown, from the file that had it first.  The line
+                    # was still fed to the tracker above, because a replayed
+                    # record is where a resumed session says which directory it
+                    # is in — that is a property of the sitting, not of the
+                    # record, and the new file has no other record that says it.
+                    continue
+                self._seen_records.add(uuid)
+            out.extend(produced)
         # The project can turn up mid-stream, on the first record we happen to
         # read; backfill it so early events are not labelled blank.  It is also
         # preferred over the name settled at adoption, because that one may have
