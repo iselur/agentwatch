@@ -110,8 +110,14 @@ stdout stays machine-clean.
 
 | code | meaning |
 |------|---------|
-| `0`  | normal — including Ctrl-C, and including a broken pipe from `\| head` |
+| `0`  | normal — including Ctrl-C, which is how you stop a tailer |
 | `2`  | usage error, or `--home` pointed at a directory that is not there |
+| `141`| the reader hung up — `agentwatch \| head`, or `\| less` quit with `q` |
+
+`141` is `128 + SIGPIPE`, what every unix tool answers when the thing
+reading its output stops reading. It means the tail did not finish, not
+that anything was wrong. Under `set -o pipefail` that will fail the
+pipeline, the same way `cat big \| head` does.
 
 There is deliberately no exit `1`. agentwatch reports what an agent is doing; it
 does not judge it. Nothing it can see is a failure of yours.

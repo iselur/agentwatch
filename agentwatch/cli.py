@@ -177,7 +177,49 @@ def _write_utf8_if_the_locale_said_nothing() -> None:
             pass                        # not a real stream, or already written to
 
 
+def _stop_writing_down_a_closed_pipe() -> None:
+    """Point stdout at nowhere, so nothing is left to fail on the way out.
+
+    Catching the `BrokenPipeError` is only half of it: whatever is still in the
+    buffer gets flushed again when the interpreter shuts down, too late for any
+    `except` of ours, and that second failure is what prints `Exception ignored
+    in: <_io.TextIOWrapper ...>` and turns the exit code into 120.  Redirecting
+    the file descriptor gives that flush somewhere harmless to go.
+    """
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    except (AttributeError, OSError, ValueError):
+        pass                            # not a real stream; nothing to protect
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    """Entry point.  Ctrl-c and a closed pipe are both ordinary here.
+
+    This is a tailer: ctrl-c is how you stop it, not a failure, so it is 0.
+    A closed pipe is different — `agentwatch --once | head` means the reader
+    stopped reading while we still had lines to write, so the tail did not
+    finish.  141 is 128 + SIGPIPE, the shell's own spelling of that, and it is
+    what every other tool in the family answers now.
+
+    Both live out here rather than around the polling loop, because argparse
+    prints `--help` and `--version` and exits before the loop is ever built —
+    and those were the two that still leaked.
+    """
+    try:
+        try:
+            return _run(argv)
+        finally:
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        return 0
+    except BrokenPipeError:
+        _stop_writing_down_a_closed_pipe()
+        return 141
+
+
+def _run(argv: Optional[List[str]] = None) -> int:
     _write_utf8_if_the_locale_said_nothing()
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -228,23 +270,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             shown += 1
         return shown
 
-    try:
-        if args.once:
-            first = watcher.poll()
-            shown = emit(first)
-            if not args.json and shown == 0:
-                _note(_nothing_message(watcher, since, _as_typed(args.project)))
-            return 0
-        return _follow(watcher, args, emit)
-    except KeyboardInterrupt:
+    if args.once:
+        first = watcher.poll()
+        shown = emit(first)
+        if not args.json and shown == 0:
+            _note(_nothing_message(watcher, since, _as_typed(args.project)))
         return 0
-    except BrokenPipeError:
-        # Someone closed the pipe — `agentwatch | head` is a normal thing to do.
-        try:
-            sys.stdout.close()
-        except (OSError, ValueError):
-            pass
-        return 0
+    return _follow(watcher, args, emit)
 
 
 def _nothing_message(watcher: Watcher, since, project: str) -> str:
