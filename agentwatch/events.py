@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 # Reads are excluded from the default view: an agent reads far more than it
@@ -58,13 +58,28 @@ _WRITE_ECHO = timedelta(seconds=30)
 
 
 def parse_time(raw: str) -> Optional[datetime]:
-    """ISO 8601 to an aware datetime, or None if it is not one."""
+    """ISO 8601 to an aware datetime, or None if it is not one.
+
+    Aware for every input, which this used to only promise.  Every real record
+    ends in ``Z``, but the file is written by another program, and one that
+    dropped its offset came back naive — and then `Watcher.poll` compared it
+    against an aware ``--since`` and raised, taking the watcher down with a
+    traceback and an exit 1 the README says cannot happen.
+
+    A naive stamp is read as UTC, which is the offset the format is written in
+    and the same reading agentlog takes.  The alternative, letting Python
+    resolve it as local, put the same log line nine hours from where agentlog
+    put it when read in Tokyo: two tools in one family disagreeing about one
+    line, quietly, and differently on each machine.  Assuming UTC can still be
+    wrong, but it is wrong by the same amount everywhere.
+    """
     if not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except (ValueError, AttributeError, TypeError):
         return None
+    return at if at.tzinfo is not None else at.replace(tzinfo=timezone.utc)
 
 
 def _js_unescape(text: str) -> str:

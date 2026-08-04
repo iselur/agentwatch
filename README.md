@@ -171,6 +171,12 @@ twice.
 It opens those files read-only and writes nothing to them. `--home DIR` (or
 `AGENTWATCH_HOME`) points it somewhere else, which is how its own tests run.
 
+Timestamps are read as written. Both formats end them in `Z`, and a record
+that arrives without an offset is read as UTC — the offset the format is
+written in, and the same reading [agentlog](https://github.com/iselur/agentlog)
+takes, so the two never disagree about the same line. Resolving it as local
+time instead would make one log say different things on different machines.
+
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 
