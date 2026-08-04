@@ -122,6 +122,11 @@ class _FileState:
         self.inode = inode
 
 
+def _label(project: str) -> str:
+    """The last component of a project path — what the column shows."""
+    return os.path.basename(project.rstrip("/")) if project else ""
+
+
 class Watcher:
     """Follows every session log under a home directory.
 
@@ -170,15 +175,32 @@ class Watcher:
         except OSError:
             return
         project = _probe_project(path, source)
-        if not project and source == "claude":
+        # A cwd read out of the log is the truth; the directory name is a guess,
+        # and a wrong one whenever the project's path contains a dash.
+        guessed = not project
+        if guessed and source == "claude":
             project = decode_claude_project(path)
-        name = os.path.basename(project.rstrip("/")) if project else ""
+        name = _label(project)
         if self.project and self.project not in name.lower():
-            # Remember the decision, so a filtered-out log is not re-probed on
-            # every rescan for as long as the watcher runs.
-            self._files[path] = _FileState(-1, Tracker("", source), st.st_ino)
-            return
-        tracker = Tracker(session_id_for(path, source), source, project)
+            if guessed:
+                # Excluded on a guess.  Follow it anyway and decide again in
+                # ``poll`` once the log says what it really is — refusing here
+                # is how asking for a project by its real name showed nothing.
+                pass
+            else:
+                # Excluded on the log's own word, which will not change.
+                # Remember the decision, so a filtered-out log is not re-probed
+                # on every rescan for as long as the watcher runs.
+                self._files[path] = _FileState(-1, Tracker("", source), st.st_ino)
+                return
+        # The tracker is seeded only with a project we actually read.  Handing it
+        # the guess would settle the question for good — it fills ``project``
+        # once and never overwrites it — and the real cwd, further down the
+        # file, would arrive to find the slot already taken.  The guess lives in
+        # ``_project_names`` instead, where it is a fallback rather than an
+        # answer.
+        tracker = Tracker(session_id_for(path, source), source,
+                          "" if guessed else project)
         # A log that existed before we started is joined at its end; one that
         # appeared since is read whole, because all of it is new to the user.
         # With --since, everything is read whole and filtered by timestamp.
@@ -235,10 +257,10 @@ class Watcher:
                 continue
             out.extend(events_from_line(line.decode("utf-8", "replace"), state.tracker))
         # The project can turn up mid-stream, on the first record we happen to
-        # read; backfill it so early events are not labelled blank.
-        name = self._project_names.get(path) or (
-            os.path.basename(state.tracker.project.rstrip("/"))
-            if state.tracker.project else "")
+        # read; backfill it so early events are not labelled blank.  It is also
+        # preferred over the name settled at adoption, because that one may have
+        # been decoded from the directory — see ``decode_claude_project``.
+        name = _label(state.tracker.project) or self._project_names.get(path, "")
         for event in out:
             event["project"] = name
         return out
@@ -254,6 +276,12 @@ class Watcher:
             if state.offset < 0:      # filtered out by --project
                 continue
             events.extend(self._read_new(path, state))
+        if self.project:
+            # Checked again here, on the resolved name, because a log adopted on
+            # a guessed one may since have said what project it really is — in
+            # either direction.
+            events = [e for e in events
+                      if self.project in (e["project"] or "").lower()]
         if self.since is not None:
             events = [e for e in events
                       if e["at"] is None or e["at"] >= self.since]

@@ -215,12 +215,28 @@ class TestFilters(Scratch):
         watcher = self.watcher(project="api")
         self.assertEqual([e["text"] for e in watcher.poll()], ["yes"])
 
-    def test_a_filtered_log_is_counted_as_found_but_not_watched(self):
+    def test_a_log_the_wrong_project_says_so_itself_is_not_watched(self):
+        # Ruled out on the log's own cwd, which cannot change: it is counted as
+        # found, so "you have no logs" and "none of them are this project" stay
+        # tellable apart, but it is never read again.
+        path = self.claude_path(project="-home-you-web")
+        self.append(path, {"type": "user", "cwd": "/home/you/web",
+                           "timestamp": self.now.isoformat(),
+                           "message": {"role": "user", "content": "hi"}})
+        self.append(path, cmd_record("no", self.now))
+        watcher = self.watcher(project="api")
+        self.assertEqual(watcher.poll(), [])
+        self.assertEqual((watcher.found(), watcher.watched()), (1, 0))
+
+    def test_a_log_ruled_out_only_by_its_directory_name_is_still_read(self):
+        # The directory name is a guess, so the exclusion is provisional: the
+        # log is followed in case it names a different project further down,
+        # and its events are dropped at the end instead.
         self.append(self.claude_path(project="-home-you-web"),
                     cmd_record("no", self.now))
         watcher = self.watcher(project="api")
-        watcher.poll()
-        self.assertEqual((watcher.found(), watcher.watched()), (1, 0))
+        self.assertEqual(watcher.poll(), [])
+        self.assertEqual((watcher.found(), watcher.watched()), (1, 1))
 
     def test_live_mode_joins_an_existing_log_at_its_end(self):
         # Without --since, history is not replayed: you asked what is happening
@@ -231,6 +247,58 @@ class TestFilters(Scratch):
         self.assertEqual(watcher.poll(), [])
         self.append(path, cmd_record("live", self.now))
         self.assertEqual([e["text"] for e in watcher.poll()], ["live"])
+
+
+class TestTheProjectNameIsTheRealOne(Scratch):
+    """Claude Code's directory name is a guess; the log's own ``cwd`` is not.
+
+    The encoded directory replaces every ``/`` with a dash, so a project whose
+    path contains a dash decodes to the wrong thing — ``-home-you-r102-bench``
+    reads back as ``/home/you/r102/bench``, and the label becomes ``bench``.
+    The log itself says ``cwd`` sooner or later, and when it does, it wins.
+    """
+
+    def late_cwd_log(self, project="-home-you-r102-bench",
+                     cwd="/home/you/r102-bench", quiet_lines=80):
+        """A log whose ``cwd`` only appears well past the top-of-file probe."""
+        path = self.claude_path(project=project)
+        self.append(path, *[cmd_record("echo %d" % i, self.now)
+                            for i in range(quiet_lines)])
+        self.append(path, {"type": "user", "cwd": cwd,
+                           "timestamp": self.now.isoformat(),
+                           "message": {"role": "user", "content": "hi"}})
+        self.append(path, cmd_record("pytest", self.now))
+        return path
+
+    def test_a_cwd_read_from_the_log_beats_the_decoded_directory(self):
+        self.late_cwd_log()
+        projects = {e["project"] for e in self.watcher().poll()}
+        self.assertEqual(projects, {"r102-bench"})
+
+    def test_the_decoded_directory_is_still_used_when_the_log_never_says(self):
+        # Nothing to correct it with, so the guess stands — it is a label of
+        # last resort, not a label of no resort.
+        self.append(self.claude_path(project="-home-you-api"),
+                    cmd_record("echo hi", self.now))
+        projects = {e["project"] for e in self.watcher().poll()}
+        self.assertEqual(projects, {"api"})
+
+    def test_filtering_on_the_real_name_finds_the_log(self):
+        # The failure this guards against is silence: asking for the project by
+        # the name it actually has printed nothing at all, which reads as "that
+        # agent did nothing" rather than "I looked in the wrong place".
+        self.late_cwd_log()
+        watcher = self.watcher(project="r102-bench")
+        self.assertEqual([e["text"] for e in watcher.poll()][-1:], ["pytest"])
+
+    def test_filtering_still_excludes_a_log_that_is_a_different_project(self):
+        self.late_cwd_log(project="-home-you-web-ui", cwd="/home/you/web-ui")
+        self.assertEqual(self.watcher(project="r102-bench").poll(), [])
+
+    def test_a_log_ruled_out_by_its_own_cwd_stays_ruled_out(self):
+        # The decoded guess said "api" and matched, but the log says otherwise.
+        self.late_cwd_log(project="-home-you-api", cwd="/home/you/checkout")
+        self.assertEqual(self.watcher(project="api").poll(), [])
 
 
 class TestNothingCrashesIt(Scratch):
