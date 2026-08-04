@@ -181,6 +181,11 @@ thinking. A
 means one thing, and turning every call into a `$` line would trade a missing
 failure for a wrong command count. Only the failure is news.
 
+A `✎` is `Write`, `Edit`, `MultiEdit` or `NotebookEdit` — and a notebook edit
+names its file under `notebook_path`, not `file_path`, so it is read from its
+own field. Miss it and an agent working through a notebook shows a blank
+screen, which is the one thing this tool is built not to do.
+
 Timestamps are read as written. Both formats end them in `Z`, and a record
 that arrives without an offset is read as UTC — the offset the format is
 written in, and the same reading [agentlog](https://github.com/iselur/agentlog)

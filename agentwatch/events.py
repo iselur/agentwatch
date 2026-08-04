@@ -30,7 +30,14 @@ from typing import Dict, List, Optional
 # writes, and a stream that is 90% reads is a stream nobody watches.
 KINDS = ("turn", "cmd", "write", "read", "error")
 
-_CLAUDE_WRITE_TOOLS = {"Write", "Edit", "MultiEdit"}
+# The tools that write a file, each with the field it puts the path under.
+# `NotebookEdit` is why this is a mapping and not a set: it uses
+# `notebook_path`, so its name alone would not have found what it wrote.  An
+# agent working through a notebook showed a blank screen, which is the one
+# thing this tool is built not to do.  tests/test_notebook_writes.py.
+_CLAUDE_WRITE_TOOLS = {"Write": "file_path", "Edit": "file_path",
+                       "MultiEdit": "file_path",
+                       "NotebookEdit": "notebook_path"}
 _CODEX_WORK_CALLS = {"exec_command", "apply_patch"}
 
 # A patch marker can sit at the start of its own line, or halfway through a
@@ -273,7 +280,7 @@ def _claude_events(obj: Dict, tr: Tracker) -> List[Dict]:
             inp = item.get("input")
             if not isinstance(inp, dict):
                 inp = {}
-            path = inp.get("file_path", "")
+            path = inp.get(_CLAUDE_WRITE_TOOLS.get(name, "file_path"), "")
             if name == "Bash":
                 cmd = inp.get("command", "")
                 if isinstance(cmd, str) and cmd:
