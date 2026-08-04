@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentwatch"
+version = "0.1.0"
+description = "Tail what your coding agent is doing, right now. Reads Claude Code and Codex session logs. Zero dependencies."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "stillworks contributors" }]
+keywords = [
+  "ai-agents", "coding-agents", "claude-code", "codex", "monitoring",
+  "tail", "observability", "agentic-workflows",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Monitoring",
+  "Topic :: Software Development :: Debuggers",
+]
+
+[project.scripts]
+agentwatch = "agentwatch.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/iselur/agentwatch"
+
+[tool.setuptools]
+packages = ["agentwatch"]
