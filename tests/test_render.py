@@ -165,6 +165,69 @@ class TestLayout(unittest.TestCase):
         self.assertIn("pytest -x", line)
 
 
+def columns(text):
+    """How many terminal cells a string occupies.
+
+    Stated here rather than imported, so this is a claim about terminals and not
+    a restatement of whatever ``render`` happens to do.  CJK and emoji are drawn
+    two cells wide; a combining mark is drawn on top of the character before it
+    and takes none of its own.
+    """
+    import unicodedata
+    total = 0
+    for char in text:
+        if unicodedata.category(char) in ("Mn", "Me"):
+            continue
+        total += 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+    return total
+
+
+class TestCharactersWiderThanOneColumn(unittest.TestCase):
+    """Counting characters is not counting columns.
+
+    An agent working on a Japanese codebase, or one that puts an emoji in a
+    commit message, produces text where the two numbers differ by a factor of
+    two — and everything this module promises is about columns.  A line that
+    counts characters overflows the terminal and wraps, which costs the fixed
+    layout far more than a truncated name would have.
+    """
+
+    WIDE = "テストを実行する"          # 8 characters, 16 columns
+    EMOJI = "deploy 🚀 to prod"        # the rocket is two columns wide
+
+    def test_a_wide_project_name_does_not_push_the_mark_along(self):
+        narrow = format_event(event(project="api"), MARKS, width=100)
+        wide = format_event(event(project="日本語プロジェクト"), MARKS, width=100)
+        self.assertEqual(columns(wide.split("$")[0]),
+                         columns(narrow.split("$")[0]))
+
+    def test_a_wide_line_still_fits_the_terminal(self):
+        for width in (40, 60, 80, 100):
+            line = format_event(event(text=self.WIDE * 40), MARKS, width=width)
+            self.assertLessEqual(columns(line), width, width)
+
+    def test_an_emoji_is_two_columns_too(self):
+        for width in (40, 60, 100):
+            line = format_event(event(text=self.EMOJI * 30), MARKS, width=width)
+            self.assertLessEqual(columns(line), width, width)
+
+    def test_a_combining_mark_is_not_charged_a_column(self):
+        # "café" written with a combining acute is five characters and four
+        # columns; charging it five truncates a line that would have fitted.
+        plain = format_event(event(text="cafe" + "x" * 60), MARKS, width=60)
+        combining = format_event(
+            event(text="café" + "x" * 60), MARKS, width=60)
+        self.assertEqual(columns(combining), columns(plain))
+
+    def test_the_mark_stays_in_one_column_whatever_the_project_is(self):
+        seen = set()
+        for project in ("a", "api-server", "日本語プロジェクト", "テスト", "",
+                        "x" * 40):
+            line = format_event(event(project=project), MARKS, width=80)
+            seen.add(columns(line.split("$")[0]))
+        self.assertEqual(len(seen), 1, seen)
+
+
 class TestWhatEachKindSays(unittest.TestCase):
 
     def test_a_turn_says_you_and_never_the_message(self):

@@ -114,14 +114,49 @@ def _clean(text: str) -> str:
         for c in text)
 
 
+def _cells(char: str) -> int:
+    """How many terminal cells one character is drawn in."""
+    if unicodedata.category(char) in ("Mn", "Me"):
+        # Drawn on top of the character before it; it occupies no cell of its own.
+        return 0
+    return 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+
+
+def display_width(text: str) -> int:
+    """The width of a string in terminal cells, which is not its length.
+
+    Every column in this layout is measured in cells, and ``len`` counts
+    characters.  On a Japanese codebase the two differ by a factor of two, so a
+    line that counts characters runs past the edge and wraps — and a wrapped
+    line costs the fixed layout far more than a truncated one does.
+    """
+    if text.isascii():
+        return len(text)                    # the overwhelmingly common case
+    return sum(_cells(c) for c in text)
+
+
+def _pad(text: str, width: int) -> str:
+    """``ljust`` in cells rather than characters."""
+    return text + " " * max(0, width - display_width(text))
+
+
 def _fit(text: str, width: int) -> str:
-    """One line, at most ``width`` columns, with a visible cut."""
+    """One line, at most ``width`` cells, with a visible cut."""
     text = " ".join(_clean(text).split())   # newlines in a stream ruin the layout
-    if len(text) <= width:
+    if display_width(text) <= width:
         return text
     if width <= 1:
-        return text[:width]
-    return text[: width - 1] + "…"
+        return "…"[:max(0, width)]
+    # Cut by cells too: stopping after ``width - 1`` characters would leave a
+    # double-width line one cell over the edge, which is the whole bug.
+    out, used = [], 0
+    for char in text:
+        cells = _cells(char)
+        if used + cells > width - 1:
+            break
+        out.append(char)
+        used += cells
+    return "".join(out) + "…"
 
 
 def _shorten_path(path: str, project: str) -> str:
@@ -148,7 +183,7 @@ def format_event(event: Dict, marks: Dict[str, str], color: bool = False,
     # holding it at full width would push the line past the edge and wrap it,
     # which costs the fixed layout far more than a truncated name does.
     room = max(4, min(PROJECT_WIDTH, width - _FIXED - MIN_TEXT))
-    project = _fit(event.get("project") or "-", room).ljust(room)
+    project = _pad(_fit(event.get("project") or "-", room), room)
     text = event.get("text") or ""
     if kind == "write":
         text = _shorten_path(text, (event.get("project") or ""))
