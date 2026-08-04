@@ -74,6 +74,9 @@ agentwatch --reads             # include file reads (an agent reads a great deal
 agentwatch --claude            # Claude Code logs only
 agentwatch --codex             # Codex logs only
 agentwatch --json              # one JSON object per line, for scripts
+agentwatch --interval 5        # look for new activity every 5s (default 1)
+agentwatch --no-color          # never colourise, whatever the terminal is
+agentwatch --version           # which agentwatch this is
 ```
 
 `--since` takes `10m`, `2h`, `3d`, `1w`, or a date like `2026-08-03`.
