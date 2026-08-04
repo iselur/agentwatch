@@ -360,6 +360,17 @@ def _codex_events(obj: Dict, tr: Tracker) -> List[Dict]:
         cwd = payload.get("cwd")
         if isinstance(cwd, str) and cwd and not tr.project:
             tr.project = cwd
+        # Codex spawns subagents, and each one gets a rollout file of its own,
+        # named after the thread rather than the sitting.  This record is the
+        # first line of that file and carries both: ``id`` is the thread, which
+        # names nothing a person can look up, and ``session_id`` is the sitting
+        # that asked for the work.  For a top-level session the two are equal,
+        # so preferring the sitting costs nothing there.  A file joined partway
+        # through never sees this record and keeps the name it was opened with,
+        # which is the best that is left.
+        sitting = payload.get("session_id")
+        if kind == "session_meta" and isinstance(sitting, str) and sitting:
+            tr.session = sitting
 
     elif kind == "event_msg":
         if ptype == "user_message":

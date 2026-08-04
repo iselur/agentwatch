@@ -252,6 +252,15 @@ which names nothing. A workflow's agents get a run directory of their own
 inside `subagents/`, one level deeper again, so the session is the directory
 holding `subagents` however far below it the transcript sits.
 
+**Codex spawns subagents too**, and gives each one a rollout file of its own,
+named after the thread rather than the sitting. The `session_meta` record on
+the file's first line carries both — `id` is the thread, `session_id` is the
+sitting that asked for the work — so that is where the name now comes from. On
+the developer's machine 42 of 1189 Codex rollouts are subagent threads. For a
+top-level session the two are equal, so nothing else moves. A rollout joined
+partway through never sees that record and keeps the name it was opened with,
+which is the best that is left.
+
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 
