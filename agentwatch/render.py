@@ -7,6 +7,7 @@ column never resizes, even when a longer name shows up later.
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import sys
@@ -93,6 +94,74 @@ def _clock(event: Dict) -> str:
         return at.astimezone().strftime("%H:%M:%S")
     except (ValueError, OSError):
         return "  --:--"
+
+
+def _local_day(event: Dict):
+    """The event's date in the reader's timezone, or None if it has no stamp."""
+    at = event.get("at")
+    if at is None:
+        return None
+    try:
+        return at.astimezone().date()
+    except (ValueError, OSError):
+        return None
+
+
+def day_rule(event: Dict, previous, width: int = 100, color: bool = False):
+    """A dated rule when the day changes, and nothing when it does not.
+
+    Returns ``(line_or_None, day_to_pass_back_next_time)``.
+
+    Every event line carries a clock and no date, which is right for a tailer:
+    everything on screen happened moments ago, and a date repeated down the page
+    is a column of the same word.  Over history it is not right at all — a week
+    of events under `--since 1w` printed four lines with the same `09:22:58` on
+    them, three byte-identical, for things that happened days apart.
+
+    So the date is printed when it changes, and only then.  Watching live never
+    crosses a day, so the common case still prints exactly what it did before;
+    the cost lands only on the runs that were ambiguous.  Midnight during a long
+    follow crosses one, which is the other half of the same problem.
+
+    The first event is a day change only if it is not today's.  Starting a live
+    session with "today" written across the top is noise about the one date
+    nobody has to be told.
+    """
+    day = _local_day(event)
+    if day is None:
+        # A stampless event is not evidence about what day it is, so it must not
+        # move the marker on — the next real event would then not be announced.
+        return None, previous
+    if previous is None:
+        try:
+            today = _dt.datetime.now().astimezone().date()
+        except (ValueError, OSError):
+            today = None
+        if day == today:
+            return None, day
+    elif day == previous:
+        return None, day
+    return _rule_line(day, width, color), day
+
+
+def _rule_line(day, width: int, color: bool) -> str:
+    # The year only when it is not this one: on the ordinary run it is four
+    # characters of nothing, and on the odd one it is the whole point.
+    try:
+        this_year = _dt.datetime.now().astimezone().year
+    except (ValueError, OSError):
+        this_year = day.year
+    label = day.strftime("%a %d %b").replace(" 0", " ")
+    if day.year != this_year:
+        label += day.strftime(" %Y")
+    text = "── {} ".format(label)
+    # Never wider than the terminal: a rule that wraps puts a stray line of
+    # dashes under itself and breaks the fixed layout it exists to organise.
+    if len(text) > width:
+        text = text[:width]
+    else:
+        text += "─" * (width - len(text))
+    return _DIM + text + _RESET if color else text
 
 
 def _clean(text: str) -> str:

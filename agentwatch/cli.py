@@ -29,7 +29,8 @@ from . import __version__
 from .events import KINDS
 from .follow import DEFAULT_STALE_S, Watcher
 from .render import (
-    format_event, format_json, marks_for, terminal_width, use_color, write_line,
+    day_rule, format_event, format_json, marks_for, terminal_width, use_color,
+    write_line,
 )
 
 DEFAULT_KINDS = ("cmd", "write", "error", "turn")
@@ -273,14 +274,24 @@ def _run(argv: Optional[List[str]] = None) -> int:
     width = terminal_width()
     wanted = set(kinds)
 
+    # The day of the last event printed, so the rule below knows when it moved.
+    # A list because `emit` is a closure and this outlives each call to it —
+    # following crosses midnight in the middle of the loop, not between runs.
+    day = [None]
+
     def emit(events) -> int:
         shown = 0
         for event in events:
             if event["kind"] not in wanted:
                 continue
-            write_line(format_json(event) if args.json
-                       else format_event(event, marks, color, width))
-            shown += 1
+            if args.json:
+                write_line(format_json(event))
+            else:
+                rule, day[0] = day_rule(event, day[0], width, color)
+                if rule:
+                    write_line(rule)
+                write_line(format_event(event, marks, color, width))
+            shown += 1        # the rule is not an event and is not counted
         return shown
 
     if args.once:

@@ -93,6 +93,23 @@ print(*sorted({json.loads(l)["text"] for l in sys.stdin}), sep="\n")'
 agentwatch --project api-server
 ```
 
+### Dates
+
+Lines carry a clock and no date, because watching live everything on
+screen happened moments ago and a date down the side is the same word
+repeated. Reach back over more than a day and the day is printed when it
+changes:
+
+```
+── Wed 29 Jul ──────────────────────────────
+09:22:58  proj          $ pytest -x
+── Sat 1 Aug ───────────────────────────────
+11:04:11  proj          ✎ src/api/routes.py
+```
+
+Only when it changes. A live session never crosses a day and never sees
+one — except at midnight, which is the point.
+
 ### JSON
 
 ```
