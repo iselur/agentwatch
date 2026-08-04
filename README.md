@@ -180,12 +180,12 @@ time instead would make one log say different things on different machines.
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 
-**A log it cannot open is named, not counted.** Until v0.1.1 a session log
-that would not open — wrong permissions, a mount that went away — was
-adopted anyway, counted in `watching 2 session logs`, and then silently
-never emitted an event. That is the one failure this tool exists to
-prevent: a quiet screen reads as an idle agent, and here it meant a locked
-file. Such a log is now left out of the count and said out loud instead:
+**A log it cannot open is named, not counted.** A session log that will not
+open — wrong permissions, a mount that went away — is easy to adopt anyway,
+count in `watching 2 session logs`, and then silently never emit an event
+from. That is the one failure this tool exists to prevent: a quiet screen
+reads as an idle agent, and here it would mean a locked file. Such a log is
+left out of the count and said out loud instead:
 
 ```
   1 session log could not be read — that activity is not shown
