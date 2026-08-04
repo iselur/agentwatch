@@ -72,21 +72,35 @@ def discover(home: str, sources: Tuple[str, ...] = ("claude", "codex")) -> List[
     return found
 
 
-def _subagent_parent(path: str) -> str:
-    """The session a subagent transcript belongs to, or "" if it is not one.
+def _subagent_session_dir(path: str) -> str:
+    """The session directory a subagent transcript sits under, or "".
 
     Claude Code writes a subagent's whole transcript beside its parent's log:
 
         <project>/<session-id>.jsonl
         <project>/<session-id>/subagents/agent-<hex>.jsonl
 
+    and one directory deeper when a workflow ran it:
+
+        <project>/<session-id>/subagents/workflows/<run-id>/agent-<hex>.jsonl
+
     The file is named after the subagent, which names nothing a person can look
-    up; the directory holding it is named after the sitting, which does.
+    up.  What names the sitting is the directory holding `subagents`, however
+    many directories the transcript itself sits under — so the search walks up
+    to the nearest `subagents` rather than looking only at the directory the
+    file is in.
     """
-    parent = os.path.dirname(path)
-    if os.path.basename(parent) != "subagents":
-        return ""
-    return os.path.basename(os.path.dirname(parent))
+    here = os.path.dirname(path)
+    while here and here != os.path.dirname(here):
+        if os.path.basename(here) == "subagents":
+            return os.path.dirname(here)
+        here = os.path.dirname(here)
+    return ""
+
+
+def _subagent_parent(path: str) -> str:
+    """The session a subagent transcript belongs to, or "" if it is not one."""
+    return os.path.basename(_subagent_session_dir(path))
 
 
 def session_id_for(path: str, source: str) -> str:
@@ -118,11 +132,14 @@ def decode_claude_project(path: str) -> str:
     dash.  Treat the result as a label of last resort; a ``cwd`` seen in the log
     always wins.
     """
-    holder = os.path.dirname(path)
-    if os.path.basename(holder) == "subagents":
-        # A subagent transcript sits two levels deeper than its parent's log,
-        # so the directory beside it is the session id, not the project.
-        holder = os.path.dirname(os.path.dirname(holder))
+    session_dir = _subagent_session_dir(path)
+    if session_dir:
+        # A subagent transcript sits below its session's directory, so the
+        # project is one further up again — not the directory beside the file,
+        # which is a run id or the word `subagents`.
+        holder = os.path.dirname(session_dir)
+    else:
+        holder = os.path.dirname(path)
     name = os.path.basename(holder)
     if name.startswith("-"):
         # The leading dash is the root slash.  Dropping it leaves a relative

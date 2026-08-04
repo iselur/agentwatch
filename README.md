@@ -248,7 +248,9 @@ itself was never the problem and has not changed: a `pytest -x` a subagent ran
 is a command that ran on this machine during this sitting, and it still
 streams. What goes is the claim that it happened somewhere else — the id now
 comes from the directory, which names the session, rather than the filename,
-which names nothing.
+which names nothing. A workflow's agents get a run directory of their own
+inside `subagents/`, one level deeper again, so the session is the directory
+holding `subagents` however far below it the transcript sits.
 
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.

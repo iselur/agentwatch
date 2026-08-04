@@ -101,6 +101,12 @@ class Case(unittest.TestCase):
             os.path.join(self.project_dir, session, "subagents",
                          name + ".jsonl"), records)
 
+    def workflow_log(self, records, session=PARENT, name=CHILD,
+                     run="wf_5e1bb28a-07b"):
+        return self._write(
+            os.path.join(self.project_dir, session, "subagents", "workflows",
+                         run, name + ".jsonl"), records)
+
     def watcher(self):
         return Watcher(home=self.home, since=self.now - timedelta(hours=2))
 
@@ -214,6 +220,75 @@ class TestWhichSessionItBelongsTo(Case):
                          ["pytest -x"])
         self.assertEqual({e["session"] for e in events}, {PARENT})
         self.assertEqual(w.watched(), 1)
+
+
+class TestASubagentOfAWorkflow(Case):
+    """The same transcript, one directory deeper.
+
+    A workflow's agents get a run directory of their own inside `subagents/`:
+
+        <project>/<session-id>/subagents/workflows/<run-id>/agent-<hex>.jsonl
+
+    The first fix looked only at the directory immediately holding the file, so
+    189 of the developer's 582 subagent transcripts — every one a workflow ran —
+    went on being adopted as sessions of their own.  Found by diffing the
+    session ids against agentlog's over the whole corpus after that fix shipped:
+    190 sessions agentwatch saw that agentlog did not, and every one of them was
+    named `agent-<hex>`.  What names the sitting is the directory above
+    `subagents`, however many directories the transcript itself sits under.
+    """
+
+    def test_a_workflow_subagent_is_not_a_second_session(self):
+        self.parent_log([self.typed("run the workflow"),
+                         self.ran("make", "t1")])
+        self.workflow_log([self.ran("pytest -x", "s1", 26)])
+        w = self.watcher()
+        w.poll()
+        self.assertEqual(w.watched(), 1)
+
+    def test_its_events_carry_the_parent_session_id(self):
+        self.parent_log([self.typed("run the workflow")])
+        self.workflow_log([self.ran("pytest -x", "s1", 26)])
+        events = self.watcher().poll()
+        self.assertEqual([e["text"] for e in events if e["kind"] == "cmd"],
+                         ["pytest -x"])
+        self.assertEqual({e["session"] for e in events}, {PARENT})
+
+    def test_the_id_survives_any_depth_below_subagents(self):
+        # The run directory is one level today.  Nothing promises it stays one.
+        deep = os.path.join(self.project_dir, PARENT, "subagents", "workflows",
+                            "wf_5e1bb28a-07b", "round-2", CHILD + ".jsonl")
+        self.assertEqual(session_id_for(deep, "claude"), PARENT)
+
+    def test_the_project_is_the_parents_project(self):
+        # Not the run id, and not the word `subagents`.  Whatever label the
+        # sitting carries, its subagents carry the same one.
+        self.parent_log([self.typed("run the workflow")])
+        self.workflow_log([self.ran("pytest -x", "s1", 26)])
+        events = self.watcher().poll()
+        self.assertTrue(events)
+        self.assertEqual(len({e["project"] for e in events}), 1, events)
+        self.assertNotIn("wf_5e1bb28a-07b",
+                         {e["project"] for e in events})
+
+    def test_two_runs_of_one_session_are_still_one_session(self):
+        self.parent_log([self.typed("run both")])
+        self.workflow_log([self.ran("pytest -x", "s1", 26)],
+                          run="wf_aaaaaaaa-000", name="agent-a1")
+        self.workflow_log([self.ran("pytest -q", "s2", 26)],
+                          run="wf_bbbbbbbb-111", name="agent-a2")
+        w = self.watcher()
+        texts = [e["text"] for e in w.poll() if e["kind"] == "cmd"]
+        self.assertEqual(sorted(texts), ["pytest -q", "pytest -x"])
+        self.assertEqual(w.watched(), 1)
+
+    def test_a_session_directory_named_subagents_is_not_walked_past(self):
+        # The guard against walking up until something looks like a session id:
+        # the search stops at the first `subagents` above the file, and the
+        # sitting is whatever directory holds it.
+        path = os.path.join(self.project_dir, "subagents", "subagents",
+                            CHILD + ".jsonl")
+        self.assertEqual(session_id_for(path, "claude"), "subagents")
 
 
 class TestCodexIsUnaffected(Case):
