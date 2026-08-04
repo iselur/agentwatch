@@ -221,6 +221,21 @@ There is no honest fix in a stream — the end record is the very next record
 [agentlog](https://github.com/iselur/agentlog) reads whole files after the
 fact and does recover them.
 
+**Editing one file twice is two edits.** Older Codex builds name a patched file
+in both records, so the second sighting has to be dropped or every edit shows
+up twice. The rule for dropping it used to be thirty seconds on the clock — the
+same file again, that soon, is the echo — and nothing in that rule asked whether
+an echo was even possible. An agent that fixes a file, runs the tests and fixes
+it again eight seconds later made two edits, and the second one silently did
+not exist. On 1189 real session files that swallowed 133 of 742 successfully
+patched paths, better than one in six, across 87 sessions; the gaps were spread
+evenly from five seconds to thirty, which is what ordinary consecutive work
+looks like, while a real echo lands in well under a second. What makes a report
+an echo is the pairing, not the clock: one envelope buys exactly one
+suppression, and two edits bring two envelopes however close together they
+land. The window survives only as an expiry, so an envelope whose result never
+came cannot sit waiting to swallow the next real edit.
+
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 

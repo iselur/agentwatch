@@ -168,8 +168,10 @@ class TestItDoesNotSwallowTheOrdinaryCase(Case):
         self.assertEqual(self.kinds(both), [("cmd", "git status")])
 
     def test_two_patches_to_one_file_a_minute_apart_are_two_writes(self):
-        # The echo suppressor is bounded by time, not by count: this is a
-        # second edit, not the same one seen twice.
+        # The echo suppressor is paired, not timed: each envelope is spent by
+        # the one result that confirms it, so this is a second edit rather
+        # than the same one seen twice.  See test_repeated_edits.py, where
+        # the same holds eight seconds apart.
         first = applied(ts="2026-08-04T09:00:05.400Z")
         second = applied(ts="2026-08-04T09:01:05.400Z")
         writes = [e for e in self.events(envelope(), first, envelope(), second)

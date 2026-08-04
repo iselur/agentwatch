@@ -212,23 +212,36 @@ class TestMemoryStaysBounded(unittest.TestCase):
             tracker.remember("call_{}".format(i), "cmd {}".format(i))
         self.assertLessEqual(len(tracker._labels), tracker._max_labels + 1)
 
-    def test_the_write_echo_table_stops_growing(self):
+    def test_the_pending_envelope_table_stops_growing(self):
         tracker = Tracker("s", "codex")
         at = NOW
         for i in range(20000):
-            tracker.already_written("/f/{}".format(i), at + timedelta(seconds=i))
-        self.assertLessEqual(len(tracker._writes), tracker._max_labels + 1)
+            tracker.envelope_sent("/f/{}".format(i), at + timedelta(seconds=i))
+        self.assertLessEqual(len(tracker._pending), tracker._max_labels + 1)
 
-    def test_two_writes_far_apart_are_two_events(self):
+    def test_one_envelope_covers_one_confirmation_and_no_more(self):
+        # The suppression is paired, not timed: an envelope is spent by the
+        # result that confirms it, and the next report of that file is a
+        # second edit however soon it lands.
         tracker = Tracker("s", "codex")
-        self.assertFalse(tracker.already_written("/f/a.py", NOW))
-        self.assertTrue(tracker.already_written("/f/a.py", NOW + timedelta(seconds=1)))
-        self.assertFalse(tracker.already_written("/f/a.py", NOW + timedelta(minutes=5)))
+        tracker.envelope_sent("/f/a.py", NOW)
+        self.assertTrue(
+            tracker.confirms_envelope("/f/a.py", NOW + timedelta(seconds=1)))
+        self.assertFalse(
+            tracker.confirms_envelope("/f/a.py", NOW + timedelta(seconds=2)))
+
+    def test_an_envelope_nobody_confirmed_expires(self):
+        # It must not sit waiting to swallow the next real edit to that file.
+        tracker = Tracker("s", "codex")
+        tracker.envelope_sent("/f/a.py", NOW)
+        self.assertFalse(
+            tracker.confirms_envelope("/f/a.py", NOW + timedelta(minutes=5)))
 
     def test_a_write_with_no_time_is_never_swallowed(self):
         tracker = Tracker("s", "codex")
-        self.assertFalse(tracker.already_written("/f/a.py", None))
-        self.assertFalse(tracker.already_written("/f/a.py", None))
+        tracker.envelope_sent("/f/a.py", None)
+        self.assertFalse(tracker.confirms_envelope("/f/a.py", None))
+        self.assertFalse(tracker.confirms_envelope("/f/a.py", NOW))
 
 
 class TestFilesThatMisbehave(unittest.TestCase):
