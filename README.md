@@ -110,14 +110,29 @@ stdout stays machine-clean.
 
 | code | meaning |
 |------|---------|
-| `0`  | normal — including Ctrl-C, which is how you stop a tailer |
+| `0`  | normal — including Ctrl-C while following, which is how you stop a tailer |
 | `2`  | usage error, or `--home` pointed at a directory that is not there |
+| `130`| Ctrl-C during `--once` — the output is cut short |
 | `141`| the reader hung up — `agentwatch \| head`, or `\| less` quit with `q` |
 
 `141` is `128 + SIGPIPE`, what every unix tool answers when the thing
 reading its output stops reading. It means the tail did not finish, not
 that anything was wrong. Under `set -o pipefail` that will fail the
 pipeline, the same way `cat big \| head` does.
+
+`130` is the difference between the two modes. Ctrl-C while following is
+the stop key and always `0`. Ctrl-C during `--once` is not, because
+`--once` is the mode you script:
+
+```bash
+agentwatch --once --json > events.json && process events.json
+```
+
+The `&&` is the whole point — exit `0` has to mean the file is complete.
+Interrupt that partway and you get the events written so far, which are
+still worth having, and `130`, which says so. An interrupt early enough
+leaves the file empty, and an empty file is exactly what a quiet day
+looks like; the exit code is the only thing that can tell them apart.
 
 There is deliberately no exit `1`. agentwatch reports what an agent is doing; it
 does not judge it. Nothing it can see is a failure of yours.

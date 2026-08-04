@@ -7,8 +7,11 @@
     agentwatch --only cmd,error    # just the commands and the failures
     agentwatch --json              # one JSON object per line
 
-Exit codes: 0 normal (Ctrl-C included), 2 usage error.  There is deliberately
-no exit 1 — agentwatch reports what an agent is doing, it does not judge it.
+Exit codes: 0 normal — including Ctrl-C while following, which is how you stop
+a tailer rather than a failure.  2 usage error.  130 Ctrl-C anywhere else,
+because `--once` promises finished output and a truncated file must not pass
+for a complete one.  141 the reader closed the pipe.  There is deliberately no
+exit 1 — agentwatch reports what an agent is doing, it does not judge it.
 """
 
 from __future__ import annotations
@@ -195,13 +198,21 @@ def _stop_writing_down_a_closed_pipe() -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    """Entry point.  Ctrl-c and a closed pipe are both ordinary here.
+    """Entry point.  Ctrl-c and a closed pipe both end the run here.
 
-    This is a tailer: ctrl-c is how you stop it, not a failure, so it is 0.
-    A closed pipe is different — `agentwatch --once | head` means the reader
-    stopped reading while we still had lines to write, so the tail did not
-    finish.  141 is 128 + SIGPIPE, the shell's own spelling of that, and it is
-    what every other tool in the family answers now.
+    Ctrl-c is 130, the family's spelling of "you stopped it".  Following is the
+    one exception and handles its own — ctrl-c is how you stop a tailer, not a
+    failure — but it has to be the exception rather than the rule, because the
+    rest of the modes were making a promise about their output.  `--once` is the
+    scripting one: `agentwatch --once --json > events.json && process it` only
+    works if exit 0 means the file is finished.  It used to be 0 whatever
+    happened, so an interrupt handed back a truncated file, or an empty one,
+    marked complete — and empty is also what a quiet day looks like.
+
+    A closed pipe is different again — `agentwatch --once | head` means the
+    reader stopped reading while we still had lines to write, so the tail did
+    not finish.  141 is 128 + SIGPIPE, the shell's own spelling of that, and it
+    is what every other tool in the family answers now.
 
     Both live out here rather than around the polling loop, because argparse
     prints `--help` and `--version` and exits before the loop is ever built —
@@ -211,9 +222,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             return _run(argv)
         finally:
+            # Whatever was printed is still worth having.  It is only no longer
+            # allowed to call itself whole.
             sys.stdout.flush()
     except KeyboardInterrupt:
-        return 0
+        return 130
     except BrokenPipeError:
         _stop_writing_down_a_closed_pipe()
         return 141
@@ -303,15 +316,25 @@ def _note(text: str) -> None:
 
 
 def _follow(watcher: Watcher, args, emit) -> int:
+    """Follow until stopped.  Ctrl-c is the stop key, so it is 0.
+
+    This is the one mode where an interrupt is the expected ending rather than
+    an interruption of anything, and it is caught here — in the only place that
+    knows it is following — rather than out in `main`, where it used to be
+    applied to `--once` as well and marked truncated output a success.
+    """
     first = watcher.poll()          # adopts the files; also replays --since
     count = watcher.watched()
     _note("watching {} session log{} · Ctrl-C to stop".format(
         count, "" if count == 1 else "s")
         if count else "waiting for a session to start · Ctrl-C to stop")
-    emit(first)
-    while True:
-        time.sleep(args.interval)
-        emit(watcher.poll())
+    try:
+        emit(first)
+        while True:
+            time.sleep(args.interval)
+            emit(watcher.poll())
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == "__main__":       # pragma: no cover
