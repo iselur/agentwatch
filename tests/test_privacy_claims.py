@@ -85,6 +85,18 @@ def claude_log():
              {"type": "tool_use", "id": "t2", "name": "Write",
               "input": {"file_path": WRITTEN,
                         "content": "PASSWORD = '" + SECRET + "'\n"}}]}},
+        # Two record types agentwatch has no branch for.  They are in the fixture
+        # because that is exactly why they are worth having: a `user` record is
+        # obviously message text and gets handled carefully, and these carry the
+        # same thing somewhere nobody is looking.  See TestTheRecordsNobodyReads.
+        {"type": "queue-operation", "operation": "enqueue",
+         "timestamp": "2026-08-04T09:00:40Z", "sessionId": "aaa",
+         "content": "then rotate the key " + SECRET},
+        {"type": "frame-link", "sessionId": "aaa",
+         "timestamp": "2026-08-04T09:00:50Z",
+         "path": "/home/you/api/out/report.html",
+         "frameUrl": "https://example.invalid/artifact/1",
+         "title": "How do I revoke " + SECRET + "?"},
     ]) + "\n"
 
 
@@ -209,6 +221,63 @@ class TestMessageTextNeverReachesTheOutput(Case):
         for line in p.stdout.splitlines():
             if line.strip():
                 self.assertNotIn(SECRET, json.dumps(json.loads(line)), line)
+
+
+class TestTheRecordsNobodyReads(Case):
+    """The promise has to hold for records no branch was written for.
+
+    Claude Code writes more into a session file than the conversation.  Two of
+    those types carry message text, and neither is a `user` record, so neither
+    passes any of the care that one gets:
+
+      - `queue-operation` (4983 on this machine) carries, in `content`, the
+        whole of a prompt somebody typed while the agent was busy.
+      - `frame-link` (104) carries, in `title`, a question of theirs turned
+        into a heading.
+
+    agentwatch has no branch for either, so today the marker cannot come out.
+    That is the point of pinning it: "we never wrote the code to read that" is
+    a fact about this version, and the sentence in the README is a promise
+    about every version.  Anyone adding a branch — a queued-work indicator is
+    the obvious one — meets these tests before a user does.
+    """
+
+    def test_a_queued_prompt_is_not_shown(self):
+        for mode in ((), ("--json",), ("--reads",), ("--claude",)):
+            with self.subTest(mode=mode or ("default",)):
+                p = self.watch(*mode)
+                self.assertNotIn(SECRET, p.stdout + p.stderr)
+
+    def test_a_queued_prompt_is_not_a_turn(self):
+        # Tempting, because an enqueue is the most literal record there is of a
+        # person typing.  It is still wrong twice over: the prompt is written
+        # again as a `user` record when it is sent, and more than half are never
+        # sent at all — 2494 enqueues on this machine against 1121 dequeues and
+        # 1358 removes.  Counting them would mark turns that never happened and
+        # count the rest twice.
+        p = self.watch("--json")
+        events = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
+        turns = [e for e in events if e["kind"] == "turn"]
+        self.assertEqual(len(turns), 2, turns)
+
+    def test_a_frame_link_title_is_not_shown(self):
+        # A title is a question somebody asked, edited into a heading.  The url
+        # and the artifact path beside it are metadata and may be shown; the
+        # sentence is not.
+        p = self.watch("--json")
+        for line in p.stdout.splitlines():
+            if line.strip():
+                self.assertNotIn(SECRET, json.dumps(json.loads(line)), line)
+
+    def test_the_fixture_really_contains_them(self):
+        # Without this the two tests above pass on a fixture that lost the
+        # records in an edit, which is the same shape of vacuous pass this file
+        # was written to avoid.
+        log = claude_log()
+        types = [json.loads(l)["type"] for l in log.splitlines()]
+        self.assertIn("queue-operation", types)
+        self.assertIn("frame-link", types)
+        self.assertEqual(log.count(SECRET), 8, "the marker moved")
 
 
 class TestTheSessionLogsAreNotWrittenTo(Case):

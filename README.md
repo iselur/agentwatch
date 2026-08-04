@@ -335,6 +335,15 @@ workers doing separate work, so nothing there is deduplicated.
 - Never writes to a session log.
 - No API key, no account, no config file.
 
+The first line has to hold for the parts of a session file that are not the
+conversation, and two of those carry message text where nobody looks for it: a
+`queue-operation` record holds the whole of a prompt you typed while the agent
+was busy, and a `frame-link` record holds a question of yours turned into a
+heading. There are 4983 of the first and 104 of the second in this machine's
+logs. agentwatch has no branch for either, and `tests/test_privacy_claims.py`
+keeps them in its fixture so that the day somebody writes one — a queued-work
+indicator is the obvious reason to — the tests are what they meet first.
+
 ---
 
 ## Tests
