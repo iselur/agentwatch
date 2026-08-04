@@ -7,8 +7,7 @@ API key, no network, no daemon — it reads the session logs Claude Code and Cod
 already write to your own disk.
 
 ```bash
-pip install 'stillworks[all]'   # the whole family of agent tools, including this one
-pip install agentwatch          # or just this one, zero dependencies
+pip install stillworks   # one install, all five agent tools, including this one
 ```
 
 Or run it straight from a checkout — it is stdlib only:
@@ -382,7 +381,7 @@ of them would read as five agreements when it was one assertion.
 One install gets all five, and `stillworks tools` says which ones you have:
 
 ```sh
-pip install 'stillworks[all]'
+pip install stillworks
 stillworks tools
 ```
 
