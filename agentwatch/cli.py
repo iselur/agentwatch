@@ -299,6 +299,11 @@ def _run(argv: Optional[List[str]] = None) -> int:
         shown = emit(first)
         if not args.json and shown == 0:
             _note(_nothing_message(watcher, since, _as_typed(args.project)))
+        # After the "nothing" message, which it qualifies: "nothing new yet" is
+        # a claim about the agent, and a locked log makes it a claim about
+        # permissions instead.
+        if _unreadable_note(watcher):
+            _note(_unreadable_note(watcher))
         return 0
     return _follow(watcher, args, emit)
 
@@ -315,6 +320,26 @@ def _nothing_message(watcher: Watcher, since, project: str) -> str:
     if since is not None:
         return "nothing has happened in that window"
     return "nothing new yet"
+
+
+def _unreadable_note(watcher: Watcher) -> str:
+    """What to say about logs that would not open, or '' if they all did.
+
+    Said on every run, including `--json`, because the alternative is a quiet
+    screen that reads as an idle agent.  Paths are always named — there are
+    rarely more than one or two, and the fix is a chmod on a specific file.
+    """
+    paths = watcher.unreadable()
+    if not paths:
+        return ""
+    n = len(paths)
+    head = "{} session log{} could not be read — that activity is not shown".format(
+        n, "" if n == 1 else "s")
+    shown = paths[:3]
+    lines = [head] + ["    " + p for p in shown]
+    if len(paths) > len(shown):
+        lines.append("    ... and {} more".format(len(paths) - len(shown)))
+    return "\n  ".join(lines)
 
 
 def _note(text: str) -> None:
@@ -339,6 +364,8 @@ def _follow(watcher: Watcher, args, emit) -> int:
     _note("watching {} session log{} · Ctrl-C to stop".format(
         count, "" if count == 1 else "s")
         if count else "waiting for a session to start · Ctrl-C to stop")
+    if _unreadable_note(watcher):
+        _note(_unreadable_note(watcher))
     try:
         emit(first)
         while True:

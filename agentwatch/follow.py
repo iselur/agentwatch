@@ -152,6 +152,7 @@ class Watcher:
         self.project = (project or "").lower()
         self._clock = clock or (lambda: datetime.now(timezone.utc).timestamp())
         self._files: Dict[str, _FileState] = {}
+        self._unreadable: set = set()
         self._first_scan = True
         self._found = 0
         self._last_scan = 0.0
@@ -174,6 +175,18 @@ class Watcher:
             st = os.stat(path)
         except OSError:
             return
+        try:
+            with open(path, "rb"):
+                pass
+        except OSError:
+            # Not adopted, so `watching N` does not count it — that line is a
+            # claim about coverage, and a file that will not open is not being
+            # watched in any sense the word is used there.  Left out of
+            # ``_files``, it is retried on every scan, so fixing the
+            # permissions mid-run is enough to pick it up.
+            self._unreadable.add(path)
+            return
+        self._unreadable.discard(path)
         project = _probe_project(path, source)
         # A cwd read out of the log is the truth; the directory name is a guess,
         # and a wrong one whenever the project's path contains a dash.
@@ -242,7 +255,13 @@ class Watcher:
                 fh.seek(state.offset)
                 chunk = fh.read()
         except OSError:
+            # A log can lose its permissions halfway through a watch, and the
+            # bytes it just grew by are exactly the activity being missed.
+            # Silently returning [] here made that indistinguishable from an
+            # idle agent, which is the one thing this tool must not do.
+            self._unreadable.add(path)
             return []
+        self._unreadable.discard(path)
         state.offset += len(chunk)
         data = state.buf + chunk
         # Everything after the last newline is a line still being written.
@@ -294,6 +313,21 @@ class Watcher:
     def watched(self) -> int:
         """How many logs are actually being followed right now."""
         return sum(1 for s in self._files.values() if s.offset >= 0)
+
+    def unreadable(self) -> List[str]:
+        """Session logs that exist and could not be opened, sorted.
+
+        A live property, not a verdict stamped at startup: a watch runs for
+        hours and permissions get fixed while it is running, so a file leaves
+        this list as soon as a read of it succeeds.  It is only updated when
+        there is a reason to open a file — a log that goes unreadable and then
+        never grows has no activity being missed, so there is nothing to say.
+
+        Deliberately only about files that would not *open*.  A file that opens
+        and yields no events is the ordinary case on every log all day, since
+        most records in a session file are not events.
+        """
+        return sorted(self._unreadable)
 
     def found(self) -> int:
         """How many session logs exist at all, before any filter.

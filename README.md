@@ -180,6 +180,26 @@ time instead would make one log say different things on different machines.
 Logs untouched for more than 15 minutes are treated as finished and skipped;
 `--stale SECONDS` changes that.
 
+**A log it cannot open is named, not counted.** Until v0.1.1 a session log
+that would not open — wrong permissions, a mount that went away — was
+adopted anyway, counted in `watching 2 session logs`, and then silently
+never emitted an event. That is the one failure this tool exists to
+prevent: a quiet screen reads as an idle agent, and here it meant a locked
+file. Such a log is now left out of the count and said out loud instead:
+
+```
+  1 session log could not be read — that activity is not shown
+    /home/you/.claude/projects/p/bbb.jsonl
+```
+
+The note goes to stderr, so `--json` stdout stays a clean stream of JSONL,
+and it is a live property rather than a verdict stamped at startup — fix the
+permissions mid-watch and the file is picked up on the next scan and drops
+off the list. A file that *opens* and yields no events is deliberately not
+reported: most records in a session log are not events, so that is the
+ordinary case on every file all day. Exit stays `0`; agentwatch reports, it
+does not gate.
+
 ---
 
 ## Privacy
