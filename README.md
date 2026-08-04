@@ -171,6 +171,16 @@ twice.
 It opens those files read-only and writes nothing to them. `--home DIR` (or
 `AGENTWATCH_HOME`) points it somewhere else, which is how its own tests run.
 
+A `✗` is a command that exited non-zero, a patch that would not apply, a
+Claude Code tool result marked as an error, and an MCP call whose
+`mcp_tool_call_end` came back `Err`. That record is the only place an MCP call
+reports itself; a tool that did not read it would show nothing at all, and an
+agent retrying a server that is not running would look exactly like an agent
+thinking. A
+*successful* MCP call stays silent on purpose: it is not a shell command, `$`
+means one thing, and turning every call into a `$` line would trade a missing
+failure for a wrong command count. Only the failure is news.
+
 Timestamps are read as written. Both formats end them in `Z`, and a record
 that arrives without an offset is read as UTC — the offset the format is
 written in, and the same reading [agentlog](https://github.com/iselur/agentlog)

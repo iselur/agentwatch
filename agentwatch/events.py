@@ -304,6 +304,8 @@ def _codex_events(obj: Dict, tr: Tracker) -> List[Dict]:
             out.append(tr._event(at, "turn", ""))
         elif ptype == "patch_apply_end":
             out.extend(_codex_patch_result(payload, tr, at))
+        elif ptype == "mcp_tool_call_end":
+            out.extend(_codex_mcp_result(payload, tr, at))
 
     elif kind == "response_item":
         if ptype == "custom_tool_call":
@@ -412,6 +414,29 @@ def _codex_patch_result(payload: Dict, tr: Tracker, at) -> List[Dict]:
         return _codex_writes(paths, tr.project or "", tr, at)
     names = ", ".join(os.path.basename(p) for p in paths[:3])
     return [tr._event(at, "error", "patch did not apply" + (": " + names if names else ""))]
+
+
+def _codex_mcp_result(payload: Dict, tr: Tracker, at) -> List[Dict]:
+    """``mcp_tool_call_end`` — the only place an MCP call reports itself.
+
+    The result is either ``{"Ok": ...}`` or ``{"Err": "..."}``, and only the
+    failure is news: an MCP call is not a shell command, and a stream that
+    turned every one of them into a ``cmd`` line would trade a missing failure
+    for a wrong command count.  A failed one is what the watcher is for — an
+    agent retrying a server that is not running otherwise looks like an agent
+    thinking.
+    """
+    result = payload.get("result")
+    if not isinstance(result, dict) or "Err" not in result:
+        return []
+    inv = payload.get("invocation")
+    inv = inv if isinstance(inv, dict) else {}
+    server = inv.get("server") if isinstance(inv.get("server"), str) else ""
+    tool = inv.get("tool") if isinstance(inv.get("tool"), str) else ""
+    # Both, where both are known: `read_mcp_resource` on its own does not say
+    # which server was down, and that is the part a person can act on.
+    what = "/".join(p for p in (server, tool) if p)
+    return [tr._event(at, "error", "mcp " + what if what else "mcp call failed")]
 
 
 def _script_failed(output) -> bool:
