@@ -187,6 +187,17 @@ written in, and the same reading [agentlog](https://github.com/iselur/agentlog)
 takes, so the two never disagree about the same line. Resolving it as local
 time instead would make one log say different things on different machines.
 
+**`»` means you, and only you.** Claude Code writes a `type: "user"` record for
+three different things: a person typing, a tool result fed back into the loop,
+and a prompt the agent wrote for a subagent (marked `isSidechain: true`). Only
+the first is a turn. On 896 real session logs, counting the subagent prompts
+too put 678 extra `»` marks in the feed against 2314 real ones — and `»` is the
+mark a person scrolls back to when finding where they left off, so a false one
+points at the wrong place. The subagent's own work still streams: its commands
+ran, its files were written, its failures failed, all in this session. A record
+with no `isSidechain` field — an older log — is a turn; only an explicit `true`
+is a subagent.
+
 **An edit is reported once it lands, not once it is sent.** Codex sends a
 patch in two records — the envelope, and a `patch_apply_end` saying whether it
 applied — and `✎` comes from the second one. A feed that scrolls has no

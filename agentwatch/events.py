@@ -248,8 +248,18 @@ def _claude_events(obj: Dict, tr: Tracker) -> List[Dict]:
                 label = tr.recall(item.get("tool_use_id", ""))
                 out.append(tr._event(at, "error", label))
         # A user record carrying tool results is the agent's own loop feeding
-        # itself, not a person typing.  Only the latter is a turn.
-        if not saw_result:
+        # itself, and a sidechain record is a prompt the agent wrote for a
+        # subagent.  Neither is a person typing, and `»` is the mark that means
+        # you — in a live feed it is the one a person uses to find where they
+        # left off, so pointing it at the agent's own prompt points at the
+        # wrong place.  On 896 real logs that was 678 of 2992 marks.
+        #
+        # The subagent's commands, writes and failures still stream: they ran
+        # on this machine in this session.  Only the claim that you spoke goes.
+        #
+        # Only an explicit true is a subagent — older logs have no such field,
+        # and dropping a real turn is the opposite mistake.
+        if not saw_result and obj.get("isSidechain") is not True:
             out.append(tr._event(at, "turn", ""))
 
     elif kind == "assistant":
