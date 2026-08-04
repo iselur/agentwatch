@@ -33,10 +33,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
+
+from tests.fixtures import session  # noqa: E402
 
 README = os.path.join(_ROOT, "README.md")
 
@@ -57,18 +58,10 @@ def claimed_fields(text):
     return _FIELD.findall(found.group(1)) if found else []
 
 
-def _records(sid, when=None, command="pytest -x"):
-    stamp = (when or datetime.now(timezone.utc)).isoformat()
-    return "\n".join([
-        json.dumps({"type": "user", "timestamp": stamp, "sessionId": sid,
-                    "cwd": "/tmp/api-server",
-                    "message": {"role": "user", "content": "run the tests"}}),
-        json.dumps({"type": "assistant", "timestamp": stamp, "sessionId": sid,
-                    "message": {"role": "assistant", "id": "m-" + sid,
-                                "content": [{"type": "tool_use",
-                                             "id": "t-" + sid, "name": "Bash",
-                                             "input": {"command": command}}]}}),
-    ]) + "\n"
+def _records(sid, command="pytest -x"):
+    """One session in the project this file's assertions name."""
+    return session(sid, cwd="/tmp/api-server", command=command,
+                   text="run the tests")
 
 
 class Case(unittest.TestCase):

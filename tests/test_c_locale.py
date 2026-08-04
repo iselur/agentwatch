@@ -26,24 +26,19 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+
+from tests.fixtures import ago as _ago, env  # noqa: E402
 
 
 def _ascii_env():
     """The environment of a container nobody gave a locale to."""
-    env = dict(os.environ)
-    env.update(LC_ALL="C", LANG="C", LANGUAGE="C",
+    return env(LC_ALL="C", LANG="C", LANGUAGE="C",
                PYTHONCOERCECLOCALE="0",   # or Python quietly upgrades C to C.UTF-8
                PYTHONUTF8="0",            # or UTF-8 mode overrides the locale
-               PYTHONPATH=_ROOT)
-    env.pop("PYTHONIOENCODING", None)
-    return env
-
-
-def _ago(seconds):
-    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+               PYTHONIOENCODING=None)     # None removes it -- see fixtures.env
 
 
 class TestAnAsciiTerminal(unittest.TestCase):

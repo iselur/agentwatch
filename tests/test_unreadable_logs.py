@@ -41,20 +41,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
 from agentwatch.follow import Watcher  # noqa: E402
-
-
-def _records(sid="s"):
-    now = datetime.now(timezone.utc).isoformat()
-    return "\n".join([
-        json.dumps({"type": "user", "timestamp": now, "sessionId": sid,
-                    "cwd": "/tmp/p",
-                    "message": {"role": "user", "content": "hi"}}),
-        json.dumps({"type": "assistant", "timestamp": now, "sessionId": sid,
-                    "message": {"role": "assistant", "id": "m-" + sid,
-                                "content": [{"type": "tool_use",
-                                             "id": "t-" + sid, "name": "Bash",
-                                             "input": {"command": "echo hi"}}]}}),
-    ]) + "\n"
+from tests.fixtures import session as _records  # noqa: E402
 
 
 class Case(unittest.TestCase):

@@ -40,16 +40,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
 from agentwatch import cli
-
-
-def _ago(seconds):
-    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+from tests.fixtures import ago as _ago
 
 
 class _WithSomeEvents(unittest.TestCase):

@@ -30,18 +30,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-
-def _ago(seconds):
-    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
-
-
-def _env():
-    return dict(os.environ, PYTHONPATH=_ROOT)
+from tests.fixtures import ago as _ago, env as _env  # noqa: E402
 
 
 def run_with_no_reader(args):

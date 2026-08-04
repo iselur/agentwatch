@@ -28,7 +28,6 @@ and the runs below prove it actually comes out.
 from __future__ import annotations
 
 import ast
-import json
 import os
 import re
 import shutil
@@ -36,10 +35,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
+
+from tests.fixtures import jsonl, user  # noqa: E402
 
 README = os.path.join(_ROOT, "README.md")
 CLI_SOURCE = os.path.join(_ROOT, "agentwatch", "cli.py")
@@ -88,10 +88,8 @@ def source_codes():
 
 
 def _records():
-    now = datetime.now(timezone.utc).isoformat()
-    return json.dumps({"type": "user", "timestamp": now, "sessionId": "s1",
-                       "cwd": "/tmp/p",
-                       "message": {"role": "user", "content": "hi"}}) + "\n"
+    """A log with something in it, so a run has a reason to reach an exit."""
+    return jsonl([user()])
 
 
 class TestTheExitCodesTheREADMEPromises(unittest.TestCase):

@@ -21,18 +21,9 @@ import tempfile
 import unittest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
 
-
-def _env(**overrides):
-    env = dict(os.environ)
-    env["PYTHONPATH"] = _ROOT
-    env.pop("AGENTWATCH_HOME", None)
-    for key, value in overrides.items():
-        if value is None:
-            env.pop(key, None)
-        else:
-            env[key] = value
-    return env
+from tests.fixtures import env as _env  # noqa: E402
 
 
 def _run(*args, **kwargs):
