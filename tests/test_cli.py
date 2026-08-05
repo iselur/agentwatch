@@ -196,9 +196,8 @@ class TestRunning(Home):
 
     def test_version_prints_and_exits_zero(self):
         with captured() as (out, _err):
-            with self.assertRaises(SystemExit) as caught:
-                main(["--version"])
-        self.assertEqual(caught.exception.code, 0)
+            code = main(["--version"])
+        self.assertEqual(code, 0)
         self.assertIn("agentwatch", out.getvalue())
 
 
@@ -207,9 +206,7 @@ class TestUsageErrors(Home):
 
     def _exit_code(self, argv):
         with captured():
-            with self.assertRaises(SystemExit) as caught:
-                main(argv)
-        return caught.exception.code
+            return main(argv)
 
     def test_a_bad_since_is_exit_two(self):
         self.assertEqual(self._exit_code(["--home", self.home, "--since", "soon"]), 2)
