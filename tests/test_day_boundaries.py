@@ -39,6 +39,7 @@ sys.path.insert(0, _ROOT)
 
 from agentwatch import cli
 from agentwatch.render import day_rule, marks_for
+from tests.fixtures import a_now_that_keeps
 
 
 def _at(**kw):
@@ -103,12 +104,19 @@ class TestTheRuleItself(unittest.TestCase):
 class _Rendered(unittest.TestCase):
     """Run the real CLI over a real home and keep the printed lines."""
 
-    def home_with(self, offsets):
+    def home_with(self, offsets, must_reach_back=0):
+        """A home whose events sit those offsets back from now.
+
+        `must_reach_back` is how many minutes of *today* the test needs behind
+        it; offsets past that are meant to land on earlier days and are left
+        there.  See fixtures.a_now_that_keeps -- a record that slips into
+        yesterday earns a day rule, and a day rule is a printed line.
+        """
         home = tempfile.mkdtemp(prefix="agentwatch_days_")
         self.addCleanup(shutil.rmtree, home, ignore_errors=True)
         folder = os.path.join(home, ".claude", "projects", "-tmp-proj")
         os.makedirs(folder)
-        now = datetime.now(timezone.utc)
+        now = a_now_that_keeps(must_reach_back)
         path = os.path.join(folder, "4ef1361b-07e4-4bc9-bb29-1783b761d677.jsonl")
         with open(path, "w", encoding="utf-8") as fh:
             for i, delta in enumerate(offsets):
@@ -156,7 +164,8 @@ class TestAWeekOfHistoryIsReadable(_Rendered):
                          "the first day's events printed before its date")
 
     def test_todays_events_still_need_no_rule(self):
-        home = self.home_with([timedelta(minutes=30), timedelta(minutes=10)])
+        home = self.home_with([timedelta(minutes=30), timedelta(minutes=10)],
+                              must_reach_back=30)
         _, printed = self.run_once(home)
         self.assertEqual(len(printed), 2, printed)
 
@@ -168,7 +177,7 @@ class TestAWeekOfHistoryIsReadable(_Rendered):
 
     def test_the_event_lines_themselves_are_unchanged(self):
         # The rule adds lines; it does not alter the ones that were there.
-        home = self.home_with([timedelta(minutes=10)])
+        home = self.home_with([timedelta(minutes=10)], must_reach_back=10)
         _, printed = self.run_once(home)
         self.assertEqual(len(printed), 1)
         self.assertIn("echo case0", printed[0])

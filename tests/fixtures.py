@@ -52,6 +52,40 @@ def ago(seconds: float) -> str:
     return (now() - timedelta(seconds=seconds)).isoformat()
 
 
+def midnight_today(now: datetime = None) -> datetime:
+    """The start of the local day the tests are running in."""
+    now = now or datetime.now().astimezone()
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def a_now_that_keeps(minutes_of_history: float, now: datetime = None) -> datetime:
+    """A "now" with that many minutes of *today* behind it.
+
+    Fixtures write records "fifty minutes ago" and mean "earlier today".  For
+    the first fifty minutes of a day those are two different things: the
+    records land in yesterday, the renderer correctly draws a day rule between
+    them, and a suite that passed all evening counts one line too many until
+    00:50.
+
+    Pinning the clock is not on offer here — some of these fixtures are read by
+    subprocess runs of the real command, which reads the real one — so the
+    fixture's clock is moved forward off midnight instead, by however far back
+    it needs to reach.  Anchor once per run and subtract the offsets from what
+    comes back: anchoring each record separately would flatten them all onto
+    midnight and collapse the span being measured.
+
+    The real clock is handed back untouched for the rest of the day, which is
+    to say almost always.
+
+    agentlog carries the same two functions, word for word.  The family
+    forbids one package importing another, and these are test fixtures rather
+    than shipped code, so the copy stays a copy — see
+    tests/test_the_clock_the_fixtures_write_with.py in either repo.
+    """
+    now = now or datetime.now().astimezone()
+    return max(now, midnight_today(now) + timedelta(minutes=minutes_of_history))
+
+
 def env(**overrides) -> dict:
     """The environment for a subprocess that should read only what it is given.
 

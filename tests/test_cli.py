@@ -167,7 +167,13 @@ class TestRunning(Home):
         self.assertIn("pytest -x", out)
 
     def test_a_window_that_excludes_everything_says_so(self):
-        _code, out, err = self.run_cli("--once", "--since", "2026-08-04T23:59:59",
+        # Derived, not written down.  This was the literal 2026-08-04T23:59:59,
+        # which excluded everything until 2026-08-05 and then excluded nothing
+        # -- a test that passes for a while and starts failing on a date, with
+        # nothing in the diff to point at.
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).astimezone().strftime(
+            "%Y-%m-%dT%H:%M:%S")
+        _code, out, err = self.run_cli("--once", "--since", tomorrow,
                                        "--no-color")
         self.assertEqual(out, "")
         self.assertIn("window", err)

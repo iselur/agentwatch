@@ -40,12 +40,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import timedelta
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
 from agentwatch import cli
-from tests.fixtures import ago as _ago
+from tests.fixtures import a_now_that_keeps
 
 
 class _WithSomeEvents(unittest.TestCase):
@@ -53,16 +54,25 @@ class _WithSomeEvents(unittest.TestCase):
 
     EVENTS = 400
 
+    # The oldest event is fifty minutes back and means "earlier today": a
+    # record that slips into yesterday earns a day rule, and the rule is a
+    # printed line, so the count comes back one too many.  See
+    # fixtures.a_now_that_keeps.
+    OLDEST_MINUTES = 3000 / 60.0
+
     def setUp(self):
         self.home = tempfile.mkdtemp(prefix="agentwatch_interrupt_")
         self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
         folder = os.path.join(self.home, ".claude", "projects", "-tmp-proj")
         os.makedirs(folder)
         path = os.path.join(folder, "4ef1361b-07e4-4bc9-bb29-1783b761d677.jsonl")
+        anchor = a_now_that_keeps(self.OLDEST_MINUTES)
         with open(path, "w", encoding="utf-8") as fh:
             for i in range(self.EVENTS):
                 fh.write(json.dumps({
-                    "type": "assistant", "timestamp": _ago(3000 - i),
+                    "type": "assistant",
+                    "timestamp": (anchor
+                                  - timedelta(seconds=3000 - i)).isoformat(),
                     "message": {"role": "assistant", "content": [
                         {"type": "tool_use", "id": "t{}".format(i),
                          "name": "Bash",
