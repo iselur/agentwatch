@@ -45,7 +45,7 @@ from datetime import timedelta
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-from agentwatch import cli
+from agentwatch import cli, printer as _printer
 from tests.fixtures import a_now_that_keeps
 
 
@@ -87,16 +87,16 @@ class _WithSomeEvents(unittest.TestCase):
         depending on how fast the machine is.
         """
         written = []
-        real = cli.write_line
+        real = _printer.write_line
 
-        def counting(text):
+        def counting(text, stream=None):
             if stop_after is not None and len(written) >= stop_after:
                 raise KeyboardInterrupt
             written.append(text)
-            return real(text)
+            return real(text, stream)
 
-        cli.write_line = counting
-        self.addCleanup(setattr, cli, "write_line", real)
+        _printer.write_line = counting
+        self.addCleanup(setattr, _printer, "write_line", real)
         with contextlib.redirect_stdout(io.StringIO()):
             rc = cli.main(["--home", self.home, "--once", "--since", "2h"]
                           + list(extra))
@@ -139,12 +139,12 @@ class TestFollowingKeepsItsZero(_WithSomeEvents):
     """Ctrl-c is how you stop a tailer.  That was always right."""
 
     def test_ctrl_c_while_following_is_not_an_error(self):
-        real = cli.write_line
-        self.addCleanup(setattr, cli, "write_line", real)
+        real = _printer.write_line
+        self.addCleanup(setattr, _printer, "write_line", real)
 
-        def stop(text):
+        def stop(text, stream=None):
             raise KeyboardInterrupt
-        cli.write_line = stop
+        _printer.write_line = stop
         rc = cli.main(["--home", self.home, "--since", "2h"])
         self.assertEqual(rc, 0, "ctrl-c on the tailer is not a failure")
 

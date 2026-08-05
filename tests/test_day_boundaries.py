@@ -37,7 +37,7 @@ from datetime import datetime, timedelta, timezone
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-from agentwatch import cli
+from agentwatch import cli, printer as _printer
 from agentwatch.render import day_rule, marks_for
 from tests.fixtures import a_now_that_keeps
 
@@ -131,9 +131,12 @@ class _Rendered(unittest.TestCase):
 
     def run_once(self, home, *extra):
         printed = []
-        real = cli.write_line
-        cli.write_line = printed.append
-        self.addCleanup(setattr, cli, "write_line", real)
+        # The seam is one module below the command now: `cli` decides which
+        # events to show and `printer` decides what a shown event looks like,
+        # so the lines this test reads are caught where they are written.
+        real = _printer.write_line
+        _printer.write_line = lambda line, stream=None: printed.append(line)
+        self.addCleanup(setattr, _printer, "write_line", real)
         rc = cli.main(["--home", home, "--once", "--since", "2w",
                        "--no-color"] + list(extra))
         return rc, printed
