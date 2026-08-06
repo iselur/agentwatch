@@ -18,7 +18,8 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from agentwatch.cli import build_parser, main, parse_kinds, parse_since
+from agentwatch.cli import build_parser, main, parse_kinds
+from agentwatch.when import parse_moment
 
 
 @contextmanager
@@ -65,31 +66,31 @@ class TestSince(unittest.TestCase):
         now = datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
         for raw, delta in (("10m", timedelta(minutes=10)), ("2h", timedelta(hours=2)),
                            ("3d", timedelta(days=3)), ("1w", timedelta(weeks=1))):
-            self.assertEqual(parse_since(raw, now), now - delta, raw)
+            self.assertEqual(parse_moment(raw, now), now - delta, raw)
 
     def test_case_does_not_matter(self):
         now = datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
-        self.assertEqual(parse_since("2H", now), parse_since("2h", now))
+        self.assertEqual(parse_moment("2H", now), parse_moment("2h", now))
 
     def test_a_bare_date_is_local_midnight(self):
-        parsed = parse_since("2026-08-03")
+        parsed = parse_moment("2026-08-03")
         self.assertEqual((parsed.year, parsed.month, parsed.day), (2026, 8, 3))
         self.assertIsNotNone(parsed.tzinfo)
 
     def test_zero_and_negative_are_refused(self):
         for raw in ("0m", "0h", "0d"):
             with self.assertRaises(ValueError):
-                parse_since(raw)
+                parse_moment(raw)
 
     def test_nonsense_says_what_to_type_instead(self):
         for raw in ("", "   ", "yesterday", "10", "m10", "10y", "--since"):
             with self.assertRaises(ValueError) as caught:
-                parse_since(raw)
+                parse_moment(raw)
             self.assertRegex(str(caught.exception), r"10m|2h|3d")
 
     def test_a_number_too_large_to_subtract_is_a_message_not_a_traceback(self):
         with self.assertRaises(ValueError):
-            parse_since("999999999999999w")
+            parse_moment("999999999999999w")
 
 
 class TestOnly(unittest.TestCase):
