@@ -113,6 +113,38 @@ class TestTheEndRecordIsWhatSpeaks(Case):
         self.assertEqual(self.kinds(applied()),
                          [("write", "/home/you/api/config.py")])
 
+    def test_a_record_that_does_not_say_is_a_patch_that_applied(self):
+        # A tail reads a file that is still being written, so the record it
+        # is looking at may be one Codex has not finished.  Absence means
+        # success: the failures are the ones that say so.  Reading it the
+        # other way would put a `✗` on screen for every patch that landed.
+        line = json.dumps({"timestamp": "2026-08-04T09:00:05.400Z",
+                           "type": "event_msg",
+                           "payload": {"type": "patch_apply_end",
+                                       "changes": {"/home/you/api/config.py":
+                                                   {"update": {}}}}})
+        self.assertEqual(self.kinds(line),
+                         [("write", "/home/you/api/config.py")])
+
+
+class TestWhatAFailedPatchIsCalled(Case):
+    """One line, on a screen that is also showing everything else."""
+
+    def test_a_failure_across_many_files_names_the_first_three(self):
+        # Three, because a patch across a dozen files still gets one line --
+        # and the first three names say which change it was.
+        paths = ("/home/you/api/d.py", "/home/you/api/a.py",
+                 "/home/you/api/c.py", "/home/you/api/b.py")
+        self.assertEqual(
+            self.kinds(applied(paths, success=False)),
+            [("error", "patch did not apply: a.py, b.py, c.py")])
+
+    def test_a_failure_that_named_no_files_still_says_what_happened(self):
+        # A trailing colon with nothing after it reads like output that got
+        # cut off, which is the one thing a live tail must never look like.
+        self.assertEqual(self.kinds(applied((), success=False)),
+                         [("error", "patch did not apply")])
+
     def test_every_file_in_the_patch_is_named(self):
         end = applied(paths=("/home/you/api/a.py", "/home/you/api/b.py"))
         self.assertEqual(sorted(t for _k, t in self.kinds(envelope(), end)),
