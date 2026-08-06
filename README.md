@@ -183,6 +183,19 @@ thinking. A
 means one thing, and turning every call into a `$` line would trade a missing
 failure for a wrong command count. Only the failure is news.
 
+A `·` is a `Read` tool call under Claude Code, where the path is a field.  Codex
+has no read tool — it reads by running `sed -n '1,200p' notes.md` — so under
+Codex the `·` is read out of the command text, by the same rule
+[agentlog](https://github.com/iselur/agentlog) uses and from the same shared
+module.  Before v0.1.1, `--reads` accepted a Codex log and showed nothing at
+all, which reads as a quiet session rather than as a flag that was never wired
+up.
+
+The rule under-reports on purpose: only verbs that open everything handed to
+them count, and nothing that searches counts at all, because `rg pattern src/`
+puts a pattern, a glob and a directory where a path goes.  A `·` for a file that
+was never opened is worse than a `·` that never appears.
+
 A `✎` is `Write`, `Edit`, `MultiEdit` or `NotebookEdit` — and a notebook edit
 names its file under `notebook_path`, not `file_path`, so it is read from its
 own field. Miss it and an agent working through a notebook shows a blank
