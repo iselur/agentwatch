@@ -181,7 +181,13 @@ class TestTheFlagShowsThemAndTheDefaultDoesNot(Case):
         self.poll()                      # writes the fixture to disk
         lines = self.read_lines(self.run_cli("--reads").stdout)
         self.assertEqual(len(lines), 1, lines)
-        self.assertIn("/home/you/api/src/app.py", lines[0])
+        # Named the way every other row in the family names a file: the part
+        # that says which file, without the part the reader already knows.  The
+        # project is printed in its own column two cells to the left, so a row
+        # that spelled it out again was saying `api` twice and calling it a
+        # path.  What must not come back is the absolute path.
+        self.assertIn("src/app.py", lines[0])
+        self.assertNotIn("/home/you/api", lines[0])
 
     def test_without_it_the_read_stays_off_the_screen(self):
         # An agent reads far more than it writes, and a feed that is 90% reads

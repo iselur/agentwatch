@@ -276,6 +276,38 @@ class TestWhatEachKindSays(unittest.TestCase):
         self.assertTrue(line.endswith("app.py"), line)
         self.assertIn("…/", line)
 
+    def test_a_command_spells_a_path_the_way_the_write_row_above_it_does(self):
+        # The two rows sit one under the other in the same feed, so the same
+        # file written and then tested has to read as the same file.  It did
+        # not: the write row went through `which_file.py` and the command row
+        # went out whole, so `src/app.py` and `/home/you/api/src/app.py` were
+        # the screen's two names for one thing.
+        line = format_event(
+            event(kind="cmd", project="api",
+                  text="pytest /home/you/api/src/app.py -k login"),
+            MARKS, width=100)
+        self.assertIn("pytest src/app.py -k login", line)
+        self.assertNotIn("/home/you", line)
+
+    def test_a_command_too_wide_gives_up_directories_before_it_gives_up_flags(
+            self):
+        """What the row is *for* is the last thing it should lose.
+
+        A command is cut from the right -- its front is what names it -- so the
+        first thing off the end was the flags, which is the part saying what
+        the run actually did.  Shortening the paths inside it first buys the
+        room back from the one place on the row that repeats what the project
+        column already said.
+        """
+        line = format_event(
+            event(kind="cmd", project="api",
+                  text="pytest /home/you/api/" + "nested/" * 5 + "app.py -k login"),
+            MARKS, width=72)
+        self.assertLessEqual(display_width(line), 72, line)
+        self.assertTrue(line.endswith("-k login"), line)
+        self.assertIn("pytest ", line)
+        self.assertNotIn("/home/you", line)
+
     def test_a_nameless_failure_still_says_something(self):
         line = format_event(event(kind="error", text=""), MARKS, width=100)
         self.assertIn("failed", line)
