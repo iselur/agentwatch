@@ -31,9 +31,10 @@ $ agentwatch
 09:41:31  api-server    $ pytest tests/test_auth.py -x
 09:41:44  web           ✎ components/Nav.tsx
 09:41:52  api-server    » you
+09:42:09  api-server    ≡ compacted, 99,593 tokens dropped
 ```
 
-Five marks, and that is the whole vocabulary:
+Six marks, and that is the whole vocabulary:
 
 | mark | meaning |
 |------|---------|
@@ -41,6 +42,7 @@ Five marks, and that is the whole vocabulary:
 | `$`  | the agent ran a command |
 | `✎`  | the agent wrote or edited a file |
 | `✗`  | a call failed |
+| `≡`  | the agent stopped to summarise itself |
 | `·`  | the agent read a file (off by default — `--reads`) |
 
 ---
@@ -200,6 +202,22 @@ A `✎` is `Write`, `Edit`, `MultiEdit` or `NotebookEdit` — and a notebook edi
 names its file under `notebook_path`, not `file_path`, so it is read from its
 own field. Miss it and an agent working through a notebook shows a blank
 screen, which is the one thing this tool is built not to do.
+
+**A `≡` is the agent summarising itself**, which from outside looks like
+nothing at all: the feed goes quiet for a minute or two and then picks up
+again, and the natural reading is that it is stuck. It is not stuck. Claude
+Code writes a `compact_boundary` record saying how big the context was before
+and after, so the line can say what it cost; Codex writes a
+`context_compacted` record with no numbers in it at all, so under Codex the
+line says only `compacted`. That is the half that matters anyway — the clock
+is on every line, so you can already see how long the gap was; what you cannot
+see is what filled it.
+
+The count is `preTokens - postTokens`, this compaction's own loss. The record
+also carries `cumulativeDroppedTokens`, which is a running total, so a
+session's third compaction would report the first two over again —
+[agentlog](https://github.com/iselur/agentlog) does the same subtraction, and
+the pair of them reading one record must not print different numbers for it.
 
 Timestamps are read as written. Both formats end them in `Z`, and a record
 that arrives without an offset is read as UTC — the offset the format is
