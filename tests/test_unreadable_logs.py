@@ -41,6 +41,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
 from agentwatch.follow import Watcher  # noqa: E402
+from agentwatch.unusable import UNREADABLE  # noqa: E402
 from tests.fixtures import session as _records  # noqa: E402
 
 
@@ -88,7 +89,7 @@ class TestALogThatCannotBeOpened(Case):
     def test_the_watcher_knows_which_files_it_could_not_read(self):
         w = self.watcher()
         w.poll()
-        self.assertEqual(w.unreadable(), [self.locked])
+        self.assertEqual(w.unreadable(), [(self.locked, UNREADABLE)])
 
     def test_it_is_not_counted_as_a_log_being_watched(self):
         # `watching N` is a claim about coverage.  A file that cannot be opened
@@ -172,7 +173,7 @@ class TestPermissionsFixedWhileWatching(Case):
     def test_the_file_stops_being_listed_once_it_can_be_read(self):
         w = self.watcher()
         self.poll(w)
-        self.assertEqual(w.unreadable(), [self.locked])
+        self.assertEqual(w.unreadable(), [(self.locked, UNREADABLE)])
         os.chmod(self.locked, 0o644)
         self.poll(w)
         self.assertEqual(w.unreadable(), [])
@@ -198,7 +199,7 @@ class TestPermissionsFixedWhileWatching(Case):
         # to discover — the appended records are what make poll() try again,
         # and they are also the activity that is now being missed.
         self.poll(w)
-        self.assertEqual(w.unreadable(), [self.locked])
+        self.assertEqual(w.unreadable(), [(self.locked, UNREADABLE)])
 
 
 class TestAnOrdinaryRunIsUnaffected(Case):

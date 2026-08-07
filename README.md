@@ -310,9 +310,15 @@ reads as an idle agent, and here it would mean a locked file. Such a log is
 left out of the count and said out loud instead:
 
 ```
-  1 session log could not be read — that activity is not shown
-    /home/you/.claude/projects/p/bbb.jsonl
+  note: 1 session log is not shown — could not be read
+      /home/you/.claude/projects/p/bbb.jsonl
 ```
+
+That is the same sentence `agentlog` prints about the same logs — one wording
+in both commands, since they arrive in one install and a reader who runs both
+should not have to work out that two notes are one problem. `agentwatch` names
+the paths, up to three of them, because a live screen has no `--verbose` to
+offer and the path is what you would act on.
 
 The note goes to stderr, so `--json` stdout stays a clean stream of JSONL,
 and it is a live property rather than a verdict stamped at startup — fix the
