@@ -20,6 +20,7 @@ from agentwatch.render import (
     ASCII_MARKS, MARKS, PROJECT_WIDTH, format_event, format_json, marks_for,
     terminal_width, use_color, write_line,
 )
+from agentwatch.terminal import display_width
 
 AT = datetime(2026, 8, 4, 9, 41, 7, tzinfo=timezone.utc)
 
@@ -256,6 +257,24 @@ class TestWhatEachKindSays(unittest.TestCase):
             event(kind="write", project="", text=os.path.join(home, "notes.md")),
             MARKS, width=100)
         self.assertIn("~/notes.md", line)
+
+    def test_a_write_too_wide_for_the_line_keeps_the_file_and_loses_the_dirs(
+            self):
+        """The one column where cutting the right-hand end is the wrong cut.
+
+        Every other kind is prose, and prose keeps its front.  A path does not:
+        `/home/you/very/deep/direc…` answers nothing, and "which file" is the
+        entire reason the line is on the screen.  `which_file.py` decides the
+        spelling, but this is the caller's decision -- to hand it the room at
+        all rather than let `_fit` have the string.
+        """
+        line = format_event(
+            event(kind="write", project="api",
+                  text="/home/you/api/" + "nested/" * 8 + "app.py"),
+            MARKS, width=60)
+        self.assertLessEqual(display_width(line), 60, line)
+        self.assertTrue(line.endswith("app.py"), line)
+        self.assertIn("…/", line)
 
     def test_a_nameless_failure_still_says_something(self):
         line = format_event(event(kind="error", text=""), MARKS, width=100)
