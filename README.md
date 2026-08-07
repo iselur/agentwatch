@@ -67,7 +67,7 @@ which file, which project, when.
 agentwatch                     # follow every active session, live
 agentwatch --since 10m         # replay the last ten minutes, then keep following
 agentwatch --once              # print what is there and exit
-agentwatch --project api       # only projects whose name contains "api"
+agentwatch --project api       # only projects whose name or path contains "api"
 agentwatch --only cmd,error    # just the commands and the failures
 agentwatch --reads             # include file reads (an agent reads a great deal)
 agentwatch --claude            # Claude Code logs only
